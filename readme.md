@@ -1,6 +1,6 @@
 # Alisp
 
-Alisp is a member of the [lisp family](https://en.wikipedia.org/wiki/Lisp_(programming_language)) of prorgamming languages created by Sophie Kirschner (sophiek@pineapplemachine.com).
+Alisp is a member of the [lisp family](https://en.wikipedia.org/wiki/Lisp_(programming_language)) of programming languages created by Sophie Kirschner (sophiek@pineapplemachine.com).
 
 This repository offers a reference implementation of the Alisp programming language in the form of a repl and interpreter written in [D](https://dlang.org/). It also includes a complete [language specification](alisp.md).
 
