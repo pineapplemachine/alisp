@@ -84,19 +84,19 @@ struct LispContext{
     
     void initializeRootContext(){
         // Initialize native types
-        this.ObjectType = new LispObject(LispObject.Type.Map, null);
+        this.ObjectType = new LispObject(LispObject.Type.Object, null);
         this.ObjectType.typeObject = this.ObjectType;
-        this.BooleanType = this.type();
-        this.CharacterType = this.type();
-        this.NumberType = this.type();
-        this.IdentifierType = this.type();
-        this.KeywordType = this.type();
-        this.ExpressionType = this.type();
-        this.ListType = this.type();
-        this.MapType = this.type();
-        this.NativeFunctionType = this.type();
-        this.LispFunctionType = this.type();
-        this.LispMethodType = this.type();
+        this.BooleanType = this.object();
+        this.CharacterType = this.object();
+        this.NumberType = this.object();
+        this.IdentifierType = this.object();
+        this.KeywordType = this.object();
+        this.ExpressionType = this.object();
+        this.ListType = this.object();
+        this.MapType = this.object();
+        this.NativeFunctionType = this.object();
+        this.LispFunctionType = this.object();
+        this.LispMethodType = this.object();
         // Initialize literals
         this.Null = new LispObject(LispObject.Type.Null, null);
         this.Null.typeObject = this.Null;
@@ -200,8 +200,8 @@ struct LispContext{
     LispObject* map(LispObject.Map value){
         return new LispObject(value, this.MapType);
     }
-    LispObject* type(){
-        return new LispObject(LispObject.Type.Map, this.ObjectType);
+    LispObject* object(){
+        return new LispObject(LispObject.Type.Object, this.ObjectType);
     }
     LispObject* nativeFunction(in NativeFunction value){
         return new LispObject(value, this.NativeFunctionType);
@@ -336,9 +336,8 @@ struct LispContext{
         Identity identity = this.identify(identifier);
         if(identity.value){
             return identity.value;
-        }else if(!identity.attribute){
-            this.logWarning("Invalid identifier.");
         }
+        this.logWarning("Invalid identifier.");
         return this.Null;
     }
     LispObject* evaluateExpression(LispObject* expression){

@@ -35,6 +35,7 @@ LispObject.Boolean toBoolean(LispObject* value){
         case Type.Keyword:
         case Type.List:
         case Type.Map:
+        case Type.Object:
         case Type.NativeFunction:
         case Type.LispFunction:
         case Type.LispMethod:
@@ -54,6 +55,7 @@ LispObject.Character toCharacter(LispObject* value){
         case Type.Keyword:
         case Type.List:
         case Type.Map:
+        case Type.Object:
         case Type.NativeFunction:
         case Type.LispFunction:
         case Type.LispMethod:
@@ -73,6 +75,7 @@ LispObject.Number toNumber(LispObject* value){
         case Type.Keyword:
         case Type.List:
         case Type.Map:
+        case Type.Object:
         case Type.NativeFunction:
         case Type.LispFunction:
         case Type.LispMethod:
@@ -112,7 +115,8 @@ bool equal(LispObject* a, LispObject* b){
                 }
             }
             return true;
-        case Type.Map:
+        case Type.Map: goto case;
+        case Type.Object:
             return b.isMap() && mapsEqual!equal(a.store.map, b.store.map);
         case Type.NativeFunction:
             return b.type is Type.NativeFunction && (
@@ -199,7 +203,8 @@ bool like(LispObject* a, LispObject* b){
                 }
             }
             return true;
-        case Type.Map:
+        case Type.Map: goto case;
+        case Type.Object:
             return b.isMap() && mapsEqual!like(a.store.map, b.store.map);
         case Type.NativeFunction:
             return b.type is Type.NativeFunction && (
@@ -295,6 +300,7 @@ int compare(LispObject* a, LispObject* b){
             }
             return compareValues(a.store.list.length, b.store.list.length);
         case Type.Map: goto case;
+        case Type.Object: goto case;
         case Type.NativeFunction: goto case;
         case Type.LispFunction: goto case;
         case Type.LispMethod:
@@ -350,16 +356,16 @@ dstring stringify(LispObject* value){
                     pair.key.toString() ~ ' ' ~ pair.value.toString()
                 ).join(" "d).asarray()
             ) ~ '}';
-        //case Type.Object:
-        //    if(value.store.map.length == 0){
-        //        return "(object)"d;
-        //    }else{
-        //        return "(object "d ~ cast(dstring)(
-        //            value.store.map.asrange().map!(pair =>
-        //                pair.key.toString() ~ ' ' ~ pair.value.toString()
-        //            ).join(" "d).asarray()
-        //        ) ~ ')';
-        //    }
+        case Type.Object:
+            if(value.store.map.length == 0){
+                return "(object)"d;
+            }else{
+                return "(object "d ~ cast(dstring)(
+                    value.store.map.asrange().map!(pair =>
+                        pair.key.toString() ~ ' ' ~ pair.value.toString()
+                    ).join(" "d).asarray()
+                ) ~ ')';
+            }
         case Type.NativeFunction:
             return "(builtin)"d;
         case Type.LispFunction:

@@ -112,7 +112,7 @@ void registerTypes(LispContext* context){
         function LispObject*(LispContext* context, LispArguments args){
             if(args.length == 0) return context.Null;
             LispObject* typeObject = context.evaluate(args[0]);
-            return new LispObject(LispObject.Type.Map, typeObject);
+            return new LispObject(LispObject.Type.Object, typeObject);
         }
     );
     context.registerFunction("typeof",
@@ -121,7 +121,7 @@ void registerTypes(LispContext* context){
             return context.evaluate(args[0]).typeObject;
         }
     );
-    context.registerFunction("typeof?",
+    context.registerFunction("istype?",
         function LispObject*(LispContext* context, LispArguments args){
             if(args.length <= 1) return context.Null;
             LispObject* value = context.evaluate(args[0]);
@@ -182,6 +182,14 @@ void registerTypes(LispContext* context){
             if(args.length == 0) return context.Null;
             return context.boolean(
                 context.evaluate(args[0]).type is LispObject.Type.Map
+            );
+        }
+    );
+    context.registerFunction("object?",
+        function LispObject*(LispContext* context, LispArguments args){
+            if(args.length == 0) return context.Null;
+            return context.boolean(
+                context.evaluate(args[0]).type is LispObject.Type.Object
             );
         }
     );
@@ -883,7 +891,7 @@ void registerObjectType(LispContext* context){
     context.register("object", context.ObjectType);
     context.registerFunction(context.ObjectType, context.Constructor,
         function LispObject*(LispContext* context, LispArguments args){
-            LispObject* type = context.type();
+            LispObject* type = context.object();
             for(size_t i = 0; i < args.length; i += 2){
                 if(i + 1 >= args.length) break;
                 LispObject* key = context.evaluate(args[i]);
@@ -999,7 +1007,7 @@ void registerAssignment(LispContext* context){
                     context.logWarning("Invalid identifier.");
                     return context.Null;
                 }else if(identity.contextObject){
-                    if(context.isLiteralType(identity.contextObject)){
+                    if(identity.contextObject.type !is LispObject.Type.Object){
                         context.logWarning("Invalid identifier.");
                         return context.Null;
                     }
@@ -1034,7 +1042,7 @@ void registerAssignment(LispContext* context){
                 context.logWarning("Invalid identifier.");
                 return context.Null;
             }else if(identity.contextObject){
-                if(context.isLiteralType(identity.contextObject)){
+                if(identity.contextObject.type !is LispObject.Type.Object){
                     context.logWarning("Invalid identifier.");
                     return context.Null;
                 }
@@ -1344,7 +1352,7 @@ void registerStandardIO(LispContext* context){
             return str.object;
         }
     );
-    fileType = context.register("file", context.type());
+    fileType = context.register("file", context.object());
     context.register(fileType, "stdin", new LispObject(0, fileType));
     context.register(fileType, "stdout", new LispObject(1, fileType));
     context.register(fileType, "stderr", new LispObject(2, fileType));
