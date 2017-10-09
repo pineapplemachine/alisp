@@ -250,44 +250,12 @@ void registerCharacterType(LispContext* context){
     );
 };
 
-// TODO: Use this hopefully
-template NumberUnaryMethodTemplate(alias defaultValue, alias transform){
-    enum NumberUnaryMethodTemplate = (
-        function LispObject*(LispContext* context, LispArguments args){
-            if(args.length == 0) return defaultValue;
-            return transform(context.evaluate(args[0]).toNumber());
-        }
-    );
-}
 void registerNumberType(LispContext* context){
     context.register("number", context.NumberType);
     context.registerFunction(context.NumberType, context.Constructor,
         function LispObject*(LispContext* context, LispArguments args){
             if(args.length == 0) return context.Zero;
             return context.number(context.evaluate(args[0]).toNumber());
-        }
-    );
-    context.registerFunction(context.NumberType, "range",
-        function LispObject*(LispContext* context, LispArguments args){
-            if(args.length < 3){
-                return context.Null;
-            }
-            LispObject.Number lowValue = context.evaluate(args[0]).toNumber();
-            LispObject.Number highValue = context.evaluate(args[1]).toNumber();
-            if(highValue <= lowValue || fisnan(lowValue) || fisnan(highValue)){
-                return context.Null;
-            }
-            LispObject* callback = context.evaluate(args[2]);
-            if(!callback.isCallable()){
-                return context.Null;
-            }
-            LispObject* result = context.Null;
-            LispObject.Number i = lowValue;
-            while(i < highValue){
-                result = context.invoke(callback, [context.number(i)]);
-                i += 1;
-            }
-            return result;
         }
     );
     context.registerFunction(context.NumberType, "parse",

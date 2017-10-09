@@ -4,7 +4,9 @@ import mach.math : pow2d;
 
 import alisp.obj : LispObject;
 
-bool mapsEqual(alias compareValues = (a, b) => a.identical(b))(LispMap a, LispMap b){
+bool mapsEqual(
+    alias compareValues = (a, b) => a.sameKey(b)
+)(LispMap a, LispMap b){
     if(a.length != b.length){
         return false;
     }
@@ -79,7 +81,7 @@ struct LispMap{
         Bucket bucket = this.buckets[bucketIndex];
         for(size_t i = 0; i < bucket.length; i++){
             KeyValuePair pair = bucket[i];
-            if(insertPair.keyHash == pair.keyHash && insertPair.key.identical(pair.key)){
+            if(insertPair.keyHash == pair.keyHash && insertPair.key.sameKey(pair.key)){
                 bucket[i] = KeyValuePair(pair.keyHash, insertPair.key, insertPair.value);
                 return pair.value;
             }
@@ -101,7 +103,7 @@ struct LispMap{
         const keyHash = key.toHash();
         Bucket bucket = this.buckets[keyHash & this.hashMask];
         foreach(KeyValuePair pair; bucket){
-            if(keyHash == pair.keyHash && key.identical(pair.key)){
+            if(keyHash == pair.keyHash && key.sameKey(pair.key)){
                 return pair.value;
             }
         }
@@ -117,7 +119,7 @@ struct LispMap{
         Bucket bucket = this.buckets[bucketIndex];
         for(size_t i = 0; i < bucket.length; i++){
             KeyValuePair pair = bucket[i];
-            if(keyHash == pair.keyHash && key.identical(pair.key)){
+            if(keyHash == pair.keyHash && key.sameKey(pair.key)){
                 this.buckets[bucketIndex] = (
                     this.buckets[bucketIndex][0 .. i] ~
                     this.buckets[bucketIndex][i + 1 .. $]

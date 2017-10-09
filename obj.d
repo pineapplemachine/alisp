@@ -8,7 +8,7 @@ import mach.traits : hash;
 
 import alisp.context : LispContext;
 import alisp.escape : escapeCharacter;
-import alisp.map : LispMap;
+import alisp.map : LispMap, mapsEqual;
 
 enum WriteFloatSettings LispFloatSettings = {
     PosNaNLiteral: "NaN",
@@ -308,48 +308,84 @@ struct LispObject{
     bool identical(LispObject* value){
         if(&this == value){
             return true;
-        }else if(this.typeObject != value.typeObject){
+        }else if(this.type !is value.type || this.typeObject != value.typeObject){
             return false;
         }
         final switch(this.type){
             case Type.Null:
-                return value.type is Type.Null;
+                return true;
             case Type.Boolean:
-                return value.type is Type.Boolean && (
-                    this.store.boolean == value.store.boolean
-                );
+                return this.store.boolean == value.store.boolean;
             case Type.Character:
-                return value.type is Type.Character && (
-                    this.store.character == value.store.character
-                );
+                return this.store.character == value.store.character;
             case Type.Number:
-                return value.type is Type.Number && (
-                    fidentical(this.store.number, value.store.number)
-                );
+                return fidentical(this.store.number, value.store.number);
             case Type.Keyword:
-                return value.type is type.Keyword && (
-                    this.store.keyword == value.store.keyword
-                );
+                return this.store.keyword == value.store.keyword;
             case Type.List:
                 return false;
             case Type.Map:
                 return false;
             case Type.NativeFunction:
-                return value.type is Type.NativeFunction && (
-                    this.store.nativeFunction == value.store.nativeFunction
-                );
+                return this.store.nativeFunction == value.store.nativeFunction;
             case Type.LispFunction:
-                return value.type is Type.LispFunction && (
-                    this.store.lispFunction.uniqueId == value.store.lispFunction.uniqueId
+                return (
+                    this.store.lispFunction.uniqueId ==
+                    value.store.lispFunction.uniqueId
                 );
             case Type.LispMethod:
-                return value.type is Type.LispMethod && (
-                    this.store.lispMethod.contextObject.identical(
-                        value.store.lispMethod.contextObject
-                    ) &&
-                    this.store.lispMethod.functionObject.identical(
-                        value.store.lispMethod.functionObject
-                    )
+                return this.store.lispMethod.contextObject.identical(
+                    value.store.lispMethod.contextObject
+                ) && this.store.lispMethod.functionObject.identical(
+                    value.store.lispMethod.functionObject
+                );
+        }
+    }
+    
+    // True when two objects should be considered the same key according to a map.
+    bool sameKey(LispObject* value){
+        if(&this == value){
+            return true;
+        }else if(this.type !is value.type || this.typeObject != value.typeObject){
+            return false;
+        }
+        final switch(this.type){
+            case Type.Null:
+                return true;
+            case Type.Boolean:
+                return this.store.boolean == value.store.boolean;
+            case Type.Character:
+                return this.store.character == value.store.character;
+            case Type.Number:
+                return fidentical(this.store.number, value.store.number);
+            case Type.Keyword:
+                return this.store.keyword == value.store.keyword;
+            case Type.List:
+                if(this.store.list.length != value.store.list.length){
+                    return false;
+                }
+                for(size_t i = 0; i < this.store.list.length; i++){
+                    if(!this.store.list[i].sameKey(value.store.list[i])){
+                        return false;
+                    }
+                }
+                return true;
+            case Type.Map:
+                return mapsEqual!((a, b) => a.sameKey(value))(
+                    this.store.map, value.store.map
+                );
+            case Type.NativeFunction:
+                return this.store.nativeFunction == value.store.nativeFunction;
+            case Type.LispFunction:
+                return (
+                    this.store.lispFunction.uniqueId ==
+                    value.store.lispFunction.uniqueId
+                );
+            case Type.LispMethod:
+                return this.store.lispMethod.contextObject.identical(
+                    value.store.lispMethod.contextObject
+                ) && this.store.lispMethod.functionObject.identical(
+                    value.store.lispMethod.functionObject
                 );
         }
     }
