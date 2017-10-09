@@ -104,7 +104,7 @@ void registerTypes(LispContext* context){
     registerExpressionType(context);
     registerListType(context);
     registerMapType(context);
-    registerTypeType(context);
+    registerObjectType(context);
     registerNativeFunctionType(context);
     registerLispFunctionType(context);
     registerLispMethodType(context);
@@ -112,17 +112,21 @@ void registerTypes(LispContext* context){
         function LispObject*(LispContext* context, LispArguments args){
             if(args.length == 0) return context.Null;
             LispObject* typeObject = context.evaluate(args[0]);
-            if(args.length == 1){
-                return new LispObject(LispObject.Type.Null, typeObject);
-            }
-            LispObject* value = context.evaluate(args[1]);
-            return value.copyShallow(typeObject);
+            return new LispObject(LispObject.Type.Object, typeObject);
         }
     );
     context.registerFunction("typeof",
         function LispObject*(LispContext* context, LispArguments args){
             if(args.length == 0) return context.Null;
             return context.evaluate(args[0]).typeObject;
+        }
+    );
+    context.registerFunction("typeof?",
+        function LispObject*(LispContext* context, LispArguments args){
+            if(args.length <= 1) return context.Null;
+            LispObject* value = context.evaluate(args[0]);
+            LispObject* type = context.evaluate(args[1]);
+            return context.boolean(value.instanceOf(type));
         }
     );
     context.registerFunction("null?",
@@ -165,22 +169,6 @@ void registerTypes(LispContext* context){
             );
         }
     );
-    context.registerFunction("identifier?",
-        function LispObject*(LispContext* context, LispArguments args){
-            if(args.length == 0) return context.Null;
-            return context.boolean(
-                context.evaluate(args[0]).type is LispObject.Type.Identifier
-            );
-        }
-    );
-    context.registerFunction("expression?",
-        function LispObject*(LispContext* context, LispArguments args){
-            if(args.length == 0) return context.Null;
-            return context.boolean(
-                context.evaluate(args[0]).type is LispObject.Type.Expression
-            );
-        }
-    );
     context.registerFunction("list?",
         function LispObject*(LispContext* context, LispArguments args){
             if(args.length == 0) return context.Null;
@@ -197,11 +185,11 @@ void registerTypes(LispContext* context){
             );
         }
     );
-    context.registerFunction("type?",
+    context.registerFunction("object?",
         function LispObject*(LispContext* context, LispArguments args){
             if(args.length == 0) return context.Null;
             return context.boolean(
-                context.evaluate(args[0]).type is LispObject.Type.Type
+                context.evaluate(args[0]).type is LispObject.Type.Object
             );
         }
     );
@@ -227,18 +215,6 @@ void registerTypes(LispContext* context){
             return context.boolean(
                 context.evaluate(args[0]).type is LispObject.Type.LispMethod
             );
-        }
-    );
-    context.registerFunction("listlike?",
-        function LispObject*(LispContext* context, LispArguments args){
-            if(args.length == 0) return context.Null;
-            return context.boolean(context.evaluate(args[0]).isList());
-        }
-    );
-    context.registerFunction("maplike?",
-        function LispObject*(LispContext* context, LispArguments args){
-            if(args.length == 0) return context.Null;
-            return context.boolean(context.evaluate(args[0]).isMap());
         }
     );
     context.registerFunction("callable?",
@@ -403,17 +379,9 @@ void registerKeywordType(LispContext* context){
     context.register("keyword", context.KeywordType);
     context.registerFunction(context.KeywordType, context.Constructor,
         function LispObject*(LispContext* context, LispArguments args){
-            if(args.length == 0){
-                stdio.writeln("Invalid arguments.");
-                return context.Null;
-            }else if(args.length > 1){
-                stdio.writeln("Invalid arguments.");
-            }
+            if(args.length == 0) return context.Null;
             LispObject* value = context.evaluate(args[0]);
-            if(
-                value.type is LispObject.Type.Identifier ||
-                value.type is LispObject.Type.Keyword
-            ){
+            if(value.type is LispObject.Type.Keyword){
                 return value;
             }else{
                 return context.keyword(value.stringify());
@@ -951,9 +919,9 @@ void registerMapType(LispContext* context){
     );
 };
 
-void registerTypeType(LispContext* context){
-    context.register("type", context.TypeType);
-    context.registerFunction(context.TypeType, context.Constructor,
+void registerObjectType(LispContext* context){
+    context.register("object", context.ObjectType);
+    context.registerFunction(context.ObjectType, context.Constructor,
         function LispObject*(LispContext* context, LispArguments args){
             LispObject* type = context.type();
             for(size_t i = 0; i < args.length; i += 2){
@@ -965,7 +933,7 @@ void registerTypeType(LispContext* context){
             return type;
         }
     );
-    context.registerFunction(context.TypeType, "apply", invokeCallable);
+    context.registerFunction(context.ObjectType, "apply", invokeCallable);
 };
 
 void registerNativeFunctionType(LispContext* context){
@@ -1421,7 +1389,7 @@ void registerStandardIO(LispContext* context){
     context.register(fileType, "stdout", new LispObject(1, fileType));
     context.register(fileType, "stderr", new LispObject(2, fileType));
     openedFiles = [stdin, stdout, stderr];
-    context.registerFunction(fileType, "constructor",
+    context.registerFunction(fileType, "invoke",
         function LispObject*(LispContext* context, LispArguments args){
             if(args.length == 0) return context.Null;
             const filePath = context.evaluate(args[0]).stringify();

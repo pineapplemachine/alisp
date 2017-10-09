@@ -127,6 +127,7 @@ LispObject* parse(LispContext* context, in string source, in string filePath = "
     LispObject*[] nodeStack = [currentNode];
     char[] parenStack = [];
     size_t[] lineNumberStack = [1];
+    bool[] identifierStack = [false];
     size_t symbolBegin = 0;
     size_t symbolLineNumber = 1;
     bool escapeSequence = false;
@@ -134,7 +135,7 @@ LispObject* parse(LispContext* context, in string source, in string filePath = "
     bool doubleQuote = false;
     bool lineComment = false;
     bool blockComment = false;
-    bool identifierChain = false;
+    bool identifierChain = false; // TODO: This var may be unnecessary
     bool interruptIdentifier = false;
     void terminateSymbol(in size_t i){
         if(symbolBegin < i){
@@ -147,9 +148,7 @@ LispObject* parse(LispContext* context, in string source, in string filePath = "
                     filePath, symbolLineNumber, e.msg, e
                 );
             }
-            if(identifierChain && currentNode.store.list.length &&
-                currentNode.store.list[$ - 1].type is LispObject.Type.Identifier
-            ){
+            if(identifierStack[$ - 1] && identifierChain && currentNode.store.list.length){
                 currentNode.store.list[$ - 1].store.list ~= parsedSymbol;
             }else{
                 currentNode.store.list ~= parsedSymbol;
@@ -223,10 +222,11 @@ LispObject* parse(LispContext* context, in string source, in string filePath = "
             terminateSymbol(i);
             symbolBegin = i;
             if(currentNode.store.list.length){
-                if(currentNode.store.list[$ - 1].type !is LispObject.Type.Identifier){
+                if(!identifierStack[$ - 1]){
                     currentNode.store.list[$ - 1] = context.identifier([
                         currentNode.store.list[$ - 1]
                     ]);
+                    identifierStack[$ - 1] = true;
                 }
             }
             identifierChain = true;
@@ -239,6 +239,7 @@ LispObject* parse(LispContext* context, in string source, in string filePath = "
             }
             nodeStack ~= currentNode;
             lineNumberStack ~= lineNumber;
+            identifierStack ~= false;
             parenStack ~= ch;
             symbolBegin = i + 1;
         }else if(ch == ')' || ch == ']' || ch == '}'){
@@ -271,9 +272,10 @@ LispObject* parse(LispContext* context, in string source, in string filePath = "
                 );
             }
             terminateSymbol(i);
-            lineNumberStack.length = lineNumberStack.length - 1;
-            parenStack.length = parenStack.length - 1;
-            nodeStack.length = nodeStack.length - 1;
+            lineNumberStack.length--;
+            identifierStack.length--;
+            parenStack.length--;
+            nodeStack.length--;
             nodeStack[$ - 1].store.list ~= currentNode;
             currentNode = nodeStack[$ - 1];
         }

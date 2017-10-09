@@ -19,7 +19,7 @@ struct LispContext{
     LispObject* ExpressionType;
     LispObject* ListType;
     LispObject* MapType;
-    LispObject* TypeType;
+    LispObject* ObjectType;
     LispObject* NativeFunctionType;
     LispObject* LispFunctionType;
     LispObject* LispMethodType;
@@ -84,7 +84,7 @@ struct LispContext{
     
     void initializeRootContext(){
         // Initialize native types
-        this.TypeType = new LispObject(LispObject.Type.Type, null);
+        this.ObjectType = new LispObject(LispObject.Type.Object, null);
         this.BooleanType = this.type();
         this.CharacterType = this.type();
         this.NumberType = this.type();
@@ -93,7 +93,7 @@ struct LispContext{
         this.ExpressionType = this.type();
         this.ListType = this.type();
         this.MapType = this.type();
-        this.TypeType = this.type();
+        this.ObjectType = this.type();
         this.NativeFunctionType = this.type();
         this.LispFunctionType = this.type();
         this.LispMethodType = this.type();
@@ -110,7 +110,7 @@ struct LispContext{
         this.PosNaN = new LispObject(LispObject.Number.nan, this.NumberType);
         this.NegNaN = new LispObject(-LispObject.Number.nan, this.NumberType);
         // Initialize common objects
-        this.Constructor = this.keyword("constructor"d);
+        this.Constructor = this.keyword("invoke"d);
     }
     
     void inheritFrom(LispContext* parent){
@@ -122,7 +122,7 @@ struct LispContext{
         this.ExpressionType = parent.ExpressionType;
         this.ListType = parent.ListType;
         this.MapType = parent.MapType;
-        this.TypeType = parent.TypeType;
+        this.ObjectType = parent.ObjectType;
         this.NativeFunctionType = parent.NativeFunctionType;
         this.LispFunctionType = parent.LispFunctionType;
         this.LispMethodType = parent.LispMethodType;
@@ -169,30 +169,29 @@ struct LispContext{
         return new LispObject(value, this.KeywordType);
     }
     LispObject* identifier(){
-        return new LispObject(LispObject.Type.Identifier, this.IdentifierType);
+        return new LispObject(LispObject.Type.List, this.IdentifierType);
     }
-    LispObject* identifier(LispObject.Identifier value){
-        return new LispObject(value, LispObject.Type.Identifier, this.IdentifierType);
+    LispObject* identifier(LispObject.List value){
+        return new LispObject(value, this.IdentifierType);
     }
     LispObject* identifier(in LispObject.Keyword value){
         return this.identifier([this.keyword(value)]);
     }
     LispObject* expression(){
-        return new LispObject(LispObject.Type.Expression, this.ExpressionType);
+        return new LispObject(LispObject.Type.List, this.ExpressionType);
     }
-    LispObject* expression(LispObject.Expression value){
-        return new LispObject(value, LispObject.Type.Expression, this.ExpressionType);
+    LispObject* expression(LispObject.List value){
+        return new LispObject(value, this.ExpressionType);
     }
     LispObject* list(){
         return new LispObject(LispObject.Type.List, this.ListType);
     }
     LispObject* list(LispObject.List value){
-        return new LispObject(value, LispObject.Type.List, this.ListType);
+        return new LispObject(value, this.ListType);
     }
     LispObject* list(dstring text){
         return new LispObject(
-            text.map!(ch => this.character(ch)).asarray(),
-            LispObject.Type.List, this.ListType
+            text.map!(ch => this.character(ch)).asarray(), this.ListType
         );
     }
     LispObject* map(){
@@ -202,7 +201,7 @@ struct LispContext{
         return new LispObject(value, this.MapType);
     }
     LispObject* type(){
-        return new LispObject(LispObject.Type.Type, this.TypeType);
+        return new LispObject(LispObject.Type.Object, this.ObjectType);
     }
     LispObject* nativeFunction(in NativeFunction value){
         return new LispObject(value, this.NativeFunctionType);
@@ -271,7 +270,7 @@ struct LispContext{
         LispObject* attribute;
     }
     Identity identify(LispObject* identifier){
-        assert(identifier.type is LispObject.Type.Identifier);
+        assert(identifier.isList());
         if(identifier.store.list.length == 0){
             return Identity(&this, this.Null);
         }
@@ -324,33 +323,33 @@ struct LispContext{
     
     // Evaluate an object.
     LispObject* evaluate(LispObject* object){
-        if(object.type is LispObject.Type.Identifier){
+        if(object.instanceOf(this.IdentifierType)){
             return this.evaluateIdentifier(object);
-        }else if(object.type !is LispObject.Type.Expression){
+        }else if(!object.instanceOf(this.ExpressionType)){
             return object;
         }else{
             return this.evaluateExpression(object);
         }
     }
     LispObject* evaluateIdentifier(LispObject* identifier){
-        assert(identifier.type is LispObject.Type.Identifier);
+        assert(identifier.isList());
         Identity identity = this.identify(identifier);
         if(identity.value){
             return identity.value;
-        }else{
-            this.logWarning("Undeclared identifier.");
-            return this.Null;
+        }else if(!identity.attribute){
+            this.logWarning("Invalid identifier.");
         }
+        return this.Null;
     }
     LispObject* evaluateExpression(LispObject* expression){
-        assert(expression.type is LispObject.Type.Expression);
+        assert(expression.isList());
         if(expression.store.list.length == 0){
             return this.Null;
         }
         LispObject* firstObject = this.evaluate(expression.store.list[0]);
-        if(firstObject.type is LispObject.Type.Identifier){
-            firstObject = this.evaluateIdentifier(firstObject);
-        }
+        //if(firstObject.instanceOf(this.IdentifierType)){
+        //    firstObject = this.evaluateIdentifier(firstObject);
+        //}
         if(firstObject.isCallable()){
             return this.invoke(firstObject, expression.store.list[1 .. $]);
         }else if(firstObject.type is LispObject.Type.Null){
@@ -364,7 +363,7 @@ struct LispContext{
     // Invoke a callable object.
     LispObject* invoke(LispObject* functionObject, LispArguments arguments){
         assert(functionObject.isCallable());
-        if(functionObject.type is LispObject.Type.Type){
+        if(functionObject.type is LispObject.Type.Object){
             if(LispObject* constructor = functionObject.attributes.get(this.Constructor)){
                 if(constructor.isCallable()){
                     return this.invoke(constructor, arguments);

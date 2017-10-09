@@ -33,11 +33,9 @@ LispObject.Boolean toBoolean(LispObject* value){
         case Type.Number:
             return value.store.number != 0 && !fisnan(value.store.number);
         case Type.Keyword:
-        case Type.Identifier:
-        case Type.Expression:
         case Type.List:
         case Type.Map:
-        case Type.Type:
+        case Type.Object:
         case Type.NativeFunction:
         case Type.LispFunction:
         case Type.LispMethod:
@@ -55,11 +53,9 @@ LispObject.Character toCharacter(LispObject* value){
             return cast(LispObject.Character)(cast(uint) value.store.number);
         case Type.Null:
         case Type.Keyword:
-        case Type.Identifier:
-        case Type.Expression:
         case Type.List:
         case Type.Map:
-        case Type.Type:
+        case Type.Object:
         case Type.NativeFunction:
         case Type.LispFunction:
         case Type.LispMethod:
@@ -77,11 +73,9 @@ LispObject.Number toNumber(LispObject* value){
             return value.store.number;
         case Type.Null:
         case Type.Keyword:
-        case Type.Identifier:
-        case Type.Expression:
         case Type.List:
         case Type.Map:
-        case Type.Type:
+        case Type.Object:
         case Type.NativeFunction:
         case Type.LispFunction:
         case Type.LispMethod:
@@ -111,8 +105,6 @@ bool equal(LispObject* a, LispObject* b){
             );
         case Type.Keyword:
             return a.store.keyword == b.store.keyword;
-        case Type.Identifier: goto case;
-        case Type.Expression: goto case;
         case Type.List:
             if(a.store.list.length != b.store.list.length){
                 return false;
@@ -123,9 +115,10 @@ bool equal(LispObject* a, LispObject* b){
                 }
             }
             return true;
-        case Type.Map: goto case;
-        case Type.Type:
+        case Type.Map:
             return b.isMap() && mapsEqual!equal(a.store.map, b.store.map);
+        case Type.Object:
+            return b.type is Type.Object && mapsEqual!equal(a.attributes, b.attributes);
         case Type.NativeFunction:
             return b.type is Type.NativeFunction && (
                 a.store.nativeFunction == b.store.nativeFunction
@@ -201,8 +194,6 @@ bool like(LispObject* a, LispObject* b){
             return b.type is Type.Keyword && (
                 a.store.keyword == b.store.keyword
             );
-        case Type.Identifier: goto case;
-        case Type.Expression: goto case;
         case Type.List:
             if(!b.isList() || a.store.list.length != b.store.list.length){
                 return false;
@@ -213,9 +204,10 @@ bool like(LispObject* a, LispObject* b){
                 }
             }
             return true;
-        case Type.Map: goto case;
-        case Type.Type:
+        case Type.Map:
             return b.isMap() && mapsEqual!like(a.store.map, b.store.map);
+        case Type.Object:
+            return b.type is Type.Object && mapsEqual!like(a.attributes, b.attributes);
         case Type.NativeFunction:
             return b.type is Type.NativeFunction && (
                 a.store.nativeFunction == b.store.nativeFunction
@@ -300,8 +292,6 @@ int compare(LispObject* a, LispObject* b){
             }
         case Type.Keyword:
             return Incomparable;
-        case Type.Identifier: goto case;
-        case Type.Expression: goto case;
         case Type.List:
             if(!b.isList()){
                 return Incomparable;
@@ -312,7 +302,7 @@ int compare(LispObject* a, LispObject* b){
             }
             return compareValues(a.store.list.length, b.store.list.length);
         case Type.Map: goto case;
-        case Type.Type: goto case;
+        case Type.Object: goto case;
         case Type.NativeFunction: goto case;
         case Type.LispFunction: goto case;
         case Type.LispMethod:
@@ -335,16 +325,16 @@ dstring stringify(LispObject* value){
             );
         case Type.Keyword:
             return ':' ~ value.store.keyword;
-        case Type.Identifier:
-            if(value.store.list.length == 0){
-                return ""d;
-            }
-            dstring str = cast(dstring)(
-                value.store.list.map!(
-                    i => i.toIdentifierString()
-                ).join(":"d).asarray()
-            );
-            return str[0] == ':' ? str[1 .. $] : str;
+        //case Type.Identifier:
+        //    if(value.store.list.length == 0){
+        //        return ""d;
+        //    }
+        //    dstring str = cast(dstring)(
+        //        value.store.list.map!(
+        //            i => i.toIdentifierString()
+        //        ).join(":"d).asarray()
+        //    );
+        //    return str[0] == ':' ? str[1 .. $] : str;
         case Type.List:
             if(
                 value.store.list.length &&
@@ -358,21 +348,21 @@ dstring stringify(LispObject* value){
                     value.store.list.map!(i => i.toString()).join(" "d).asarray()
                 ) ~ ']';
             }
-        case Type.Expression:
-            return '(' ~ cast(dstring)(
-                value.store.list.map!(i => i.toString()).join(" "d).asarray()
-            ) ~ ')';
+        //case Type.Expression:
+        //    return '(' ~ cast(dstring)(
+        //        value.store.list.map!(i => i.toString()).join(" "d).asarray()
+        //    ) ~ ')';
         case Type.Map:
             return '{' ~ cast(dstring)(
                 value.store.map.asrange().map!(pair =>
                     pair.key.toString() ~ ' ' ~ pair.value.toString()
                 ).join(" "d).asarray()
             ) ~ '}';
-        case Type.Type:
+        case Type.Object:
             if(value.attributes.length == 0){
-                return "(type)"d;
+                return "(object)"d;
             }else{
-                return "(type "d ~ cast(dstring)(
+                return "(object "d ~ cast(dstring)(
                     value.attributes.asrange().map!(pair =>
                         pair.key.toString() ~ ' ' ~ pair.value.toString()
                     ).join(" "d).asarray()

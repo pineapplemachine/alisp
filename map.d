@@ -40,7 +40,6 @@ struct LispMap{
     size_t length = 0;
     Bucket* longestBucket = null;
     Bucket[] buckets;
-    bool hasConstructor = false;
     
     this(size_t size){
         this.setSize(size);
@@ -55,7 +54,6 @@ struct LispMap{
         this.length = 0;
         this.buckets = new Bucket[1 << size];
         this.longestBucket = &this.buckets[0];
-        this.hasConstructor = false;
     }
     void resize(size_t size){
         LispMap newMap = LispMap(size);
@@ -93,10 +91,6 @@ struct LispMap{
             this.longestBucket = &bucket;
         }
         this.length++;
-        this.hasConstructor = this.hasConstructor || (
-            insertPair.key.type is LispObject.Type.Keyword &&
-            insertPair.key.store.keyword == "constructor"d
-        );
         return null;
     }
     
@@ -129,10 +123,6 @@ struct LispMap{
                     this.buckets[bucketIndex][i + 1 .. $]
                 );
                 this.length--;
-                this.hasConstructor = this.hasConstructor && !(
-                    pair.key.type is LispObject.Type.Keyword &&
-                    pair.key.store.keyword == "constructor"d
-                );
                 return pair.value;
             }
         }
