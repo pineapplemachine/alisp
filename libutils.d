@@ -153,7 +153,14 @@ bool like(LispObject* a, LispObject* b){
     }
     final switch(a.type){
         case Type.Null:
-            return false;
+            switch(b.type){
+                case Type.Null:
+                    return true;
+                case Type.Number:
+                    return fisnan(b.store.number);
+                default:
+                    return false;
+            }
         case Type.Boolean:
             switch(b.type){
                 case Type.Boolean:
@@ -181,7 +188,10 @@ bool like(LispObject* a, LispObject* b){
                 case Type.Boolean:
                     return numberLikeBoolean(a.store.number, b.store.boolean);
                 case Type.Number:
-                    return fnearequal(a.store.number, b.store.number, LikeEpsilon);
+                    return (
+                        fnearequal(a.store.number, b.store.number, LikeEpsilon) ||
+                        (fisnan(a.store.number) && fisnan(b.store.number))
+                    );
                 case Type.Character:
                     return characterLikeNumber(b.store.character, a.store.number);
                 default:
@@ -359,11 +369,11 @@ dstring stringify(LispObject* value){
                 ).join(" "d).asarray()
             ) ~ '}';
         case Type.Type:
-            if(value.store.map.length == 0){
+            if(value.attributes.length == 0){
                 return "(type)"d;
             }else{
                 return "(type "d ~ cast(dstring)(
-                    value.store.map.asrange().map!(pair =>
+                    value.attributes.asrange().map!(pair =>
                         pair.key.toString() ~ ' ' ~ pair.value.toString()
                     ).join(" "d).asarray()
                 ) ~ ')';

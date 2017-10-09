@@ -140,6 +140,8 @@ struct LispObject{
     // The value of the object
     Store store;
     
+    LispMap attributes;
+    
     this(in Type type, LispObject* typeObject){
         this.type = type;
         this.typeObject = typeObject is null ? &this : typeObject;
@@ -174,8 +176,8 @@ struct LispObject{
         this.typeObject = typeObject;
         this.store.list = list;
     }
-    this(Map map, Type type, LispObject* typeObject){
-        this.type = type;
+    this(Map map, LispObject* typeObject){
+        this.type = Type.Map;
         this.typeObject = typeObject;
         this.store.map = map;
     }
@@ -203,9 +205,7 @@ struct LispObject{
         );
     }
     bool isMap() const{
-        return (
-            this.type is Type.Map || this.type is Type.Type
-        );
+        return this.type is Type.Map;
     }
     bool isCallable() const{
         return (
@@ -219,6 +219,20 @@ struct LispObject{
     }
     LispObject* copyShallow(LispObject* typeObject){
         return new LispObject(this.type, typeObject, this.store);
+    }
+    
+    auto getAttribute(LispObject* attribute){
+        struct Result{
+            bool rootAttribute;
+            LispObject* object;
+        }
+        LispObject* object = &this;
+        LispObject* result = object.attributes.get(attribute);
+        while(!result && object.typeObject != object){
+            object = object.typeObject;
+            result = object.attributes.get(attribute);
+        }
+        return Result(object == &this, result);
     }
     
     dstring toIdentifierString(){
@@ -269,7 +283,7 @@ struct LispObject{
                 }else{
                     return dchar('[') ~ cast(dstring)(
                         this.store.list.map!(i => i.toString()).join(" "d).asarray()
-                ) ~ dchar(']');
+                    ) ~ dchar(']');
                 }
             case Type.Map:
                 return dchar('{') ~ cast(dstring)(
@@ -278,11 +292,11 @@ struct LispObject{
                     ).join(" ").asarray()
                 ) ~ dchar('}');
             case Type.Type:
-                if(this.store.map.length == 0){
+                if(this.attributes.length == 0){
                     return "(type)"d;
                 }else{
                     return "(type "d ~ cast(dstring)(
-                        this.store.map.asrange().map!(pair =>
+                        this.attributes.asrange().map!(pair =>
                             pair.key.toString() ~ ' ' ~ pair.value.toString()
                         ).join(" "d).asarray()
                     ) ~ dchar(')');

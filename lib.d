@@ -21,32 +21,32 @@ import alisp.libutils;
 
 auto listLength = function LispObject*(LispContext* context, LispArguments args){
     LispObject* list = context.evaluate(args[0]);
-    if(args[0].isList()){
-        return context.number(args[0].store.list.length);
+    if(list.isList()){
+        return context.number(list.store.list.length);
     }else{
         return context.NaN;
     }
 };
 auto listEmpty = function LispObject*(LispContext* context, LispArguments args){
     LispObject* list = context.evaluate(args[0]);
-    if(args[0].isList()){
-        return context.boolean(args[0].store.list.length == 0);
+    if(list.isList()){
+        return context.boolean(list.store.list.length == 0);
     }else{
         return context.Null;
     }
 };
 auto mapLength = function LispObject*(LispContext* context, LispArguments args){
     LispObject* map = context.evaluate(args[0]);
-    if(args[0].isMap()){
-        return context.number(args[0].store.map.length);
+    if(map.isMap()){
+        return context.number(map.store.map.length);
     }else{
         return context.NaN;
     }
 };
 auto mapEmpty = function LispObject*(LispContext* context, LispArguments args){
-    LispObject* list = context.evaluate(args[0]);
-    if(args[0].isMap()){
-        return context.boolean(args[0].store.map.length == 0);
+    LispObject* map = context.evaluate(args[0]);
+    if(map.isMap()){
+        return context.boolean(map.store.map.length == 0);
     }else{
         return context.Null;
     }
@@ -125,6 +125,128 @@ void registerTypes(LispContext* context){
             return context.evaluate(args[0]).typeObject;
         }
     );
+    context.registerFunction("null?",
+        function LispObject*(LispContext* context, LispArguments args){
+            if(args.length == 0) return context.Null;
+            return context.boolean(
+                context.evaluate(args[0]).type is LispObject.Type.Null
+            );
+        }
+    );
+    context.registerFunction("boolean?",
+        function LispObject*(LispContext* context, LispArguments args){
+            if(args.length == 0) return context.Null;
+            return context.boolean(
+                context.evaluate(args[0]).type is LispObject.Type.Boolean
+            );
+        }
+    );
+    context.registerFunction("character?",
+        function LispObject*(LispContext* context, LispArguments args){
+            if(args.length == 0) return context.Null;
+            return context.boolean(
+                context.evaluate(args[0]).type is LispObject.Type.Character
+            );
+        }
+    );
+    context.registerFunction("number?",
+        function LispObject*(LispContext* context, LispArguments args){
+            if(args.length == 0) return context.Null;
+            return context.boolean(
+                context.evaluate(args[0]).type is LispObject.Type.Number
+            );
+        }
+    );
+    context.registerFunction("keyword?",
+        function LispObject*(LispContext* context, LispArguments args){
+            if(args.length == 0) return context.Null;
+            return context.boolean(
+                context.evaluate(args[0]).type is LispObject.Type.Keyword
+            );
+        }
+    );
+    context.registerFunction("identifier?",
+        function LispObject*(LispContext* context, LispArguments args){
+            if(args.length == 0) return context.Null;
+            return context.boolean(
+                context.evaluate(args[0]).type is LispObject.Type.Identifier
+            );
+        }
+    );
+    context.registerFunction("expression?",
+        function LispObject*(LispContext* context, LispArguments args){
+            if(args.length == 0) return context.Null;
+            return context.boolean(
+                context.evaluate(args[0]).type is LispObject.Type.Expression
+            );
+        }
+    );
+    context.registerFunction("list?",
+        function LispObject*(LispContext* context, LispArguments args){
+            if(args.length == 0) return context.Null;
+            return context.boolean(
+                context.evaluate(args[0]).type is LispObject.Type.List
+            );
+        }
+    );
+    context.registerFunction("map?",
+        function LispObject*(LispContext* context, LispArguments args){
+            if(args.length == 0) return context.Null;
+            return context.boolean(
+                context.evaluate(args[0]).type is LispObject.Type.Map
+            );
+        }
+    );
+    context.registerFunction("type?",
+        function LispObject*(LispContext* context, LispArguments args){
+            if(args.length == 0) return context.Null;
+            return context.boolean(
+                context.evaluate(args[0]).type is LispObject.Type.Type
+            );
+        }
+    );
+    context.registerFunction("builtin?",
+        function LispObject*(LispContext* context, LispArguments args){
+            if(args.length == 0) return context.Null;
+            return context.boolean(
+                context.evaluate(args[0]).type is LispObject.Type.NativeFunction
+            );
+        }
+    );
+    context.registerFunction("function?",
+        function LispObject*(LispContext* context, LispArguments args){
+            if(args.length == 0) return context.Null;
+            return context.boolean(
+                context.evaluate(args[0]).type is LispObject.Type.LispFunction
+            );
+        }
+    );
+    context.registerFunction("method?",
+        function LispObject*(LispContext* context, LispArguments args){
+            if(args.length == 0) return context.Null;
+            return context.boolean(
+                context.evaluate(args[0]).type is LispObject.Type.LispMethod
+            );
+        }
+    );
+    context.registerFunction("listlike?",
+        function LispObject*(LispContext* context, LispArguments args){
+            if(args.length == 0) return context.Null;
+            return context.boolean(context.evaluate(args[0]).isList());
+        }
+    );
+    context.registerFunction("maplike?",
+        function LispObject*(LispContext* context, LispArguments args){
+            if(args.length == 0) return context.Null;
+            return context.boolean(context.evaluate(args[0]).isMap());
+        }
+    );
+    context.registerFunction("callable?",
+        function LispObject*(LispContext* context, LispArguments args){
+            if(args.length == 0) return context.Null;
+            return context.boolean(context.evaluate(args[0]).isCallable());
+        }
+    );
 }
 
 void registerBooleanType(LispContext* context){
@@ -175,6 +297,29 @@ void registerNumberType(LispContext* context){
         function LispObject*(LispContext* context, LispArguments args){
             if(args.length == 0) return context.Zero;
             return context.number(context.evaluate(args[0]).toNumber());
+        }
+    );
+    context.registerFunction(context.NumberType, "range",
+        function LispObject*(LispContext* context, LispArguments args){
+            if(args.length < 3){
+                return context.Null;
+            }
+            LispObject.Number lowValue = context.evaluate(args[0]).toNumber();
+            LispObject.Number highValue = context.evaluate(args[1]).toNumber();
+            if(highValue <= lowValue || fisnan(lowValue) || fisnan(highValue)){
+                return context.Null;
+            }
+            LispObject* callback = context.evaluate(args[2]);
+            if(!callback.isCallable()){
+                return context.Null;
+            }
+            LispObject* result = context.Null;
+            LispObject.Number i = lowValue;
+            while(i < highValue){
+                result = context.invoke(callback, [context.number(i)]);
+                i += 1;
+            }
+            return result;
         }
     );
     context.registerFunction(context.NumberType, "parse",
@@ -815,17 +960,17 @@ void registerTypeType(LispContext* context){
                 if(i + 1 >= args.length) break;
                 LispObject* key = context.evaluate(args[i]);
                 LispObject* value = context.evaluate(args[i + 1]);
-                type.store.map.insert(key, value);
+                type.attributes.insert(key, value);
             }
             return type;
         }
     );
-    //context.registerFunction(context.TypeType, "call", invokeCallable);
+    context.registerFunction(context.TypeType, "apply", invokeCallable);
 };
 
 void registerNativeFunctionType(LispContext* context){
     context.register("builtin", context.NativeFunctionType);
-    context.registerFunction(context.NativeFunctionType, "call", invokeCallable);
+    context.registerFunction(context.NativeFunctionType, "apply", invokeCallable);
 };
 
 void registerLispFunctionType(LispContext* context){
@@ -841,7 +986,7 @@ void registerLispFunctionType(LispContext* context){
             }
         }
     );
-    context.registerFunction(context.LispFunctionType, "call", invokeCallable);
+    context.registerFunction(context.LispFunctionType, "apply", invokeCallable);
     context.registerFunction(context.LispFunctionType, "args",
         function LispObject*(LispContext* context, LispArguments args){
             if(args.length == 0) return context.Null;
@@ -877,7 +1022,7 @@ void registerLispMethodType(LispContext* context){
             }
         }
     );
-    context.registerFunction(context.LispMethodType, "call", invokeCallable);
+    context.registerFunction(context.LispMethodType, "apply", invokeCallable);
     context.registerFunction(context.LispMethodType, "context",
         function LispObject*(LispContext* context, LispArguments args){
             if(args.length == 0) return context.Null;
@@ -911,26 +1056,33 @@ void registerAssignment(LispContext* context){
         function LispObject*(LispContext* context, LispArguments args){
             if(args.length == 0){
                 return context.Null;
-            }else if(
-                args[0].type !is LispObject.Type.Identifier &&
-                args[0].type !is LispObject.Type.Keyword
-            ){
-                stdio.writeln("Invalid identifier.");
+            }else if(!args[0].isList()){
+                context.logWarning("Invalid identifier.");
                 return context.Null;
             }
             LispObject* value = (args.length > 1 ?
                 context.evaluate(args[1]) : context.Null
             );
-            if(args[0].type is LispObject.Type.Keyword){
-                context.register(args[0], value);
-            }else if(
-                args[0].type is LispObject.Type.Identifier &&
-                args[0].store.list.length == 1 &&
-                args[0].store.list[0].type is LispObject.Type.Keyword
-            ){
+            if(args[0].store.list.length == 1){
                 context.register(args[0].store.list[0], value);
             }else{
-                stdio.writeln("Invalid identifier.");
+                LispContext.Identity identity = context.identify(args[0]);
+                if(!identity.attribute){
+                    context.logWarning("Invalid identifier.");
+                    return context.Null;
+                }else if(identity.contextObject){
+                    if(context.isLiteralType(identity.contextObject)){
+                        context.logWarning("Invalid identifier.");
+                        return context.Null;
+                    }
+                    identity.contextObject.attributes.insert(identity.attribute, value);
+                }else if(!identity.context || identity.context == context){
+                    context.log("No context object");
+                    context.inScope.insert(identity.attribute, value);
+                }else{
+                    context.logWarning("Invalid identifier.");
+                    return context.Null;
+                }
             }
             return value;
         }
@@ -944,40 +1096,32 @@ void registerAssignment(LispContext* context){
         function LispObject*(LispContext* context, LispArguments args){
             if(args.length <= 1){
                 return context.Null;
-            }else if(
-                args[0].type !is LispObject.Type.Identifier &&
-                args[0].type !is LispObject.Type.Keyword
-            ){
-                stdio.writeln("Invalid identifier.");
+            }else if(!args[0].isList()){
+                context.logWarning("Invalid identifier.");
                 return context.Null;
             }
-            LispObject* value = (args.length > 1 ?
-                context.evaluate(args[1]) : context.Null
-            );
+            LispObject* value = context.evaluate(args[1]);
             LispContext.Identity identity = context.identify(args[0]);
-            LispContext* targetContext = (
-                identity.context ? identity.context : context
-            );
-            if(identity.contextObject && identity.contextAttribute){
-                assert(
-                    identity.contextObject.type is LispObject.Type.Map ||
-                    identity.contextObject.type is LispObject.Type.Type
-                );
-                identity.contextObject.store.map.insert(
-                    identity.contextAttribute, value
-                );
-            }else if(args[0].type is LispObject.Type.Keyword){
-                targetContext.register(args[0], value);
-            }else if(
-                args[0].type is LispObject.Type.Identifier &&
-                args[0].store.list.length == 1 &&
-                args[0].store.list[0].type is LispObject.Type.Keyword
-            ){
-                targetContext.register(args[0].store.list[0], value);
+            if(!identity.attribute){
+                context.logWarning("Invalid identifier.");
+                return context.Null;
+            }else if(identity.contextObject){
+                if(context.isLiteralType(identity.contextObject)){
+                    context.logWarning("Invalid identifier.");
+                    return context.Null;
+                }
+                identity.contextObject.attributes.insert(identity.attribute, value);
+            }else if(identity.context){
+                identity.context.inScope.insert(identity.attribute, value);
             }else{
-                stdio.writeln("Invalid identifier.");
+                context.inScope.insert(identity.attribute, value);
             }
             return value;
+        }
+    );
+    context.registerFunction("quote",
+        function LispObject*(LispContext* context, LispArguments args){
+            return args[0];
         }
     );
 }

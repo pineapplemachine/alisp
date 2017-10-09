@@ -45,20 +45,29 @@ struct LispContext{
         return this.PosNaN;
     }
     
+    bool isLiteralType(LispObject* object){
+        return (
+            object.typeObject == this.Null ||
+            object.typeObject == this.BooleanType ||
+            object.typeObject == this.CharacterType ||
+            object.typeObject == this.NumberType ||
+            object.typeObject == this.KeywordType
+        );
+    }
     // Objects returning true absolutely must be copied
     // before they are changed in any way.
-    bool isSharedLiteral(LispObject* literal){
+    bool isSharedLiteral(LispObject* object){
         return (
-            literal == this.Null ||
-            literal == this.True ||
-            literal == this.False ||
-            literal == this.NullCharacter ||
-            literal == this.Zero ||
-            literal == this.One ||
-            literal == this.PosInfinity ||
-            literal == this.NegInfinity ||
-            literal == this.PosNaN ||
-            literal == this.NegNaN
+            object == this.Null ||
+            object == this.True ||
+            object == this.False ||
+            object == this.NullCharacter ||
+            object == this.Zero ||
+            object == this.One ||
+            object == this.PosInfinity ||
+            object == this.NegInfinity ||
+            object == this.PosNaN ||
+            object == this.NegNaN
         );
     }
     
@@ -75,45 +84,19 @@ struct LispContext{
     
     void initializeRootContext(){
         // Initialize native types
-        this.TypeType = new LispObject(
-            LispObject.Type.Type, cast(LispObject*) null
-        );
-        this.BooleanType = new LispObject(
-            LispObject.Type.Type, this.TypeType
-        );
-        this.CharacterType = new LispObject(
-            LispObject.Type.Type, this.TypeType
-        );
-        this.NumberType = new LispObject(
-            LispObject.Type.Type, this.TypeType
-        );
-        this.IdentifierType = new LispObject(
-            LispObject.Type.Type, this.TypeType
-        );
-        this.KeywordType = new LispObject(
-            LispObject.Type.Type, this.TypeType
-        );
-        this.ExpressionType = new LispObject(
-            LispObject.Type.Type, this.TypeType
-        );
-        this.ListType = new LispObject(
-            LispObject.Type.Type, this.TypeType
-        );
-        this.MapType = new LispObject(
-            LispObject.Type.Type, this.TypeType
-        );
-        this.TypeType = new LispObject(
-            LispObject.Type.Type, this.TypeType
-        );
-        this.NativeFunctionType = new LispObject(
-            LispObject.Type.Type, this.TypeType
-        );
-        this.LispFunctionType = new LispObject(
-            LispObject.Type.Type, this.TypeType
-        );
-        this.LispMethodType = new LispObject(
-            LispObject.Type.Type, this.TypeType
-        );
+        this.TypeType = new LispObject(LispObject.Type.Type, null);
+        this.BooleanType = this.type();
+        this.CharacterType = this.type();
+        this.NumberType = this.type();
+        this.IdentifierType = this.type();
+        this.KeywordType = this.type();
+        this.ExpressionType = this.type();
+        this.ListType = this.type();
+        this.MapType = this.type();
+        this.TypeType = this.type();
+        this.NativeFunctionType = this.type();
+        this.LispFunctionType = this.type();
+        this.LispMethodType = this.type();
         // Initialize literals
         this.Null = new LispObject(LispObject.Type.Null, null);
         this.Null.typeObject = this.Null;
@@ -216,13 +199,10 @@ struct LispContext{
         return new LispObject(LispObject.Type.Map, this.MapType);
     }
     LispObject* map(LispObject.Map value){
-        return new LispObject(value, LispObject.Type.Map, this.MapType);
+        return new LispObject(value, this.MapType);
     }
     LispObject* type(){
         return new LispObject(LispObject.Type.Type, this.TypeType);
-    }
-    LispObject* type(LispObject.Map value){
-        return new LispObject(value, LispObject.Type.Type, this.TypeType);
     }
     LispObject* nativeFunction(in NativeFunction value){
         return new LispObject(value, this.NativeFunctionType);
@@ -265,11 +245,7 @@ struct LispContext{
     }
     
     LispObject* register(LispObject* withObject, LispObject* key, LispObject* value){
-        assert(
-            withObject.type is LispObject.Type.Map ||
-            withObject.type is LispObject.Type.Type
-        );
-        withObject.store.map.insert(key, value);
+        withObject.attributes.insert(key, value);
         return value;
     }
     LispObject* registerFunction(
@@ -292,7 +268,7 @@ struct LispContext{
         LispContext* context;
         LispObject* contextObject;
         LispObject* value;
-        LispObject* contextAttribute;
+        LispObject* attribute;
     }
     Identity identify(LispObject* identifier){
         assert(identifier.type is LispObject.Type.Identifier);
@@ -308,25 +284,27 @@ struct LispContext{
             if(!identity.value || (
                 !identity.context && value.type is LispObject.Type.Keyword
             )){
-                return Identity(&this);
+                return Identity(&this, null, null, value);
             }
             context = identity.context;
             value = identity.value;
         }
+        bool rootAttribute = void;
         for(size_t i = 1; i < identifier.store.list.length; i++){
             attribute = this.evaluate(identifier.store.list[i]);
-            LispObject* nextValue = (value.type is LispObject.Type.Type ? 
-                value.store.map.get(attribute) : value.typeObject.store.map.get(attribute)
-            );
-            if(!nextValue){
-                return Identity(context, lastValue, null, attribute);
+            auto nextValue = value.getAttribute(attribute);
+            rootAttribute = nextValue.rootAttribute;
+            if(!nextValue.object){
+                if(i == identifier.store.list.length - 1){
+                    return Identity(context, value, null, attribute);
+                }else{
+                    return Identity(&this);
+                }
             }
             lastValue = value;
-            value = nextValue;
+            value = nextValue.object;
         }
-        if(
-            lastValue && lastValue.type !is LispObject.Type.Type && value.isCallable()
-        ){
+        if(!rootAttribute && lastValue && value.isCallable()){
             LispObject* method = this.lispMethod(LispMethod(lastValue, value));
             return Identity(context, lastValue, method, attribute);
         }else{
@@ -387,7 +365,7 @@ struct LispContext{
     LispObject* invoke(LispObject* functionObject, LispArguments arguments){
         assert(functionObject.isCallable());
         if(functionObject.type is LispObject.Type.Type){
-            if(LispObject* constructor = functionObject.store.map.get(this.Constructor)){
+            if(LispObject* constructor = functionObject.attributes.get(this.Constructor)){
                 if(constructor.isCallable()){
                     return this.invoke(constructor, arguments);
                 }else{
