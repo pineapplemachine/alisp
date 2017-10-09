@@ -112,7 +112,7 @@ void registerTypes(LispContext* context){
         function LispObject*(LispContext* context, LispArguments args){
             if(args.length == 0) return context.Null;
             LispObject* typeObject = context.evaluate(args[0]);
-            return new LispObject(LispObject.Type.Object, typeObject);
+            return new LispObject(LispObject.Type.Map, typeObject);
         }
     );
     context.registerFunction("typeof",
@@ -185,14 +185,6 @@ void registerTypes(LispContext* context){
             );
         }
     );
-    context.registerFunction("object?",
-        function LispObject*(LispContext* context, LispArguments args){
-            if(args.length == 0) return context.Null;
-            return context.boolean(
-                context.evaluate(args[0]).type is LispObject.Type.Object
-            );
-        }
-    );
     context.registerFunction("builtin?",
         function LispObject*(LispContext* context, LispArguments args){
             if(args.length == 0) return context.Null;
@@ -217,7 +209,7 @@ void registerTypes(LispContext* context){
             );
         }
     );
-    context.registerFunction("callable?",
+    context.registerFunction("invoke?",
         function LispObject*(LispContext* context, LispArguments args){
             if(args.length == 0) return context.Null;
             return context.boolean(context.evaluate(args[0]).isCallable());
@@ -928,7 +920,7 @@ void registerObjectType(LispContext* context){
                 if(i + 1 >= args.length) break;
                 LispObject* key = context.evaluate(args[i]);
                 LispObject* value = context.evaluate(args[i + 1]);
-                type.attributes.insert(key, value);
+                type.store.map.insert(key, value);
             }
             return type;
         }
@@ -1043,7 +1035,7 @@ void registerAssignment(LispContext* context){
                         context.logWarning("Invalid identifier.");
                         return context.Null;
                     }
-                    identity.contextObject.attributes.insert(identity.attribute, value);
+                    identity.contextObject.store.map.insert(identity.attribute, value);
                 }else if(!identity.context || identity.context == context){
                     context.log("No context object");
                     context.inScope.insert(identity.attribute, value);
@@ -1078,7 +1070,7 @@ void registerAssignment(LispContext* context){
                     context.logWarning("Invalid identifier.");
                     return context.Null;
                 }
-                identity.contextObject.attributes.insert(identity.attribute, value);
+                identity.contextObject.store.map.insert(identity.attribute, value);
             }else if(identity.context){
                 identity.context.inScope.insert(identity.attribute, value);
             }else{

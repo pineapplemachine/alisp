@@ -100,7 +100,6 @@ struct LispObject{
         Keyword,
         List,
         Map,
-        Object,
         NativeFunction,
         LispFunction,
         LispMethod,
@@ -125,8 +124,6 @@ struct LispObject{
     LispObject* typeObject = null;
     // The value of the object
     Store store;
-    
-    LispMap attributes;
     
     this(in Type type, LispObject* typeObject){
         this.type = type;
@@ -191,7 +188,7 @@ struct LispObject{
     }
     bool isCallable() const{
         return (
-            this.type is Type.Object || this.type is Type.NativeFunction ||
+            this.type is Type.Map || this.type is Type.NativeFunction ||
             this.type is Type.LispFunction || this.type is Type.LispMethod
         );
     }
@@ -216,10 +213,10 @@ struct LispObject{
             LispObject* object;
         }
         LispObject* object = &this;
-        LispObject* result = object.attributes.get(attribute);
+        LispObject* result = object.store.map.get(attribute);
         while(!result && object.typeObject != object){
             object = object.typeObject;
-            result = object.attributes.get(attribute);
+            result = object.store.map.get(attribute);
         }
         return Result(object == &this, result);
     }
@@ -280,16 +277,16 @@ struct LispObject{
                         pair.key.toString() ~ ' ' ~ pair.value.toString()
                     ).join(" ").asarray()
                 ) ~ dchar('}');
-            case Type.Object:
-                if(this.attributes.length == 0){
-                    return "(object)"d;
-                }else{
-                    return "(object "d ~ cast(dstring)(
-                        this.attributes.asrange().map!(pair =>
-                            pair.key.toString() ~ ' ' ~ pair.value.toString()
-                        ).join(" "d).asarray()
-                    ) ~ dchar(')');
-                }
+            //case Type.Object:
+            //    if(this.store.map.length == 0){
+            //        return "(object)"d;
+            //    }else{
+            //        return "(object "d ~ cast(dstring)(
+            //            this.store.map.asrange().map!(pair =>
+            //                pair.key.toString() ~ ' ' ~ pair.value.toString()
+            //            ).join(" "d).asarray()
+            //        ) ~ dchar(')');
+            //    }
             case Type.NativeFunction:
                 return "(builtin)"d;
             case Type.LispFunction:
@@ -333,9 +330,9 @@ struct LispObject{
                 return value.type is type.Keyword && (
                     this.store.keyword == value.store.keyword
                 );
-            case Type.List: goto case;
-            case Type.Map: goto case;
-            case Type.Object:
+            case Type.List:
+                return false;
+            case Type.Map:
                 return false;
             case Type.NativeFunction:
                 return value.type is Type.NativeFunction && (
@@ -380,9 +377,6 @@ struct LispObject{
                 break;
             case Type.Map:
                 valueHash = mapHash(this.store.map);
-                break;
-            case Type.Object:
-                valueHash = mapHash(this.attributes);
                 break;
             case Type.NativeFunction:
                 // TODO: Verify behavior

@@ -84,7 +84,8 @@ struct LispContext{
     
     void initializeRootContext(){
         // Initialize native types
-        this.ObjectType = new LispObject(LispObject.Type.Object, null);
+        this.ObjectType = new LispObject(LispObject.Type.Map, null);
+        this.ObjectType.typeObject = this.ObjectType;
         this.BooleanType = this.type();
         this.CharacterType = this.type();
         this.NumberType = this.type();
@@ -93,7 +94,6 @@ struct LispContext{
         this.ExpressionType = this.type();
         this.ListType = this.type();
         this.MapType = this.type();
-        this.ObjectType = this.type();
         this.NativeFunctionType = this.type();
         this.LispFunctionType = this.type();
         this.LispMethodType = this.type();
@@ -201,7 +201,7 @@ struct LispContext{
         return new LispObject(value, this.MapType);
     }
     LispObject* type(){
-        return new LispObject(LispObject.Type.Object, this.ObjectType);
+        return new LispObject(LispObject.Type.Map, this.ObjectType);
     }
     LispObject* nativeFunction(in NativeFunction value){
         return new LispObject(value, this.NativeFunctionType);
@@ -244,7 +244,7 @@ struct LispContext{
     }
     
     LispObject* register(LispObject* withObject, LispObject* key, LispObject* value){
-        withObject.attributes.insert(key, value);
+        withObject.store.map.insert(key, value);
         return value;
     }
     LispObject* registerFunction(
@@ -363,17 +363,13 @@ struct LispContext{
     // Invoke a callable object.
     LispObject* invoke(LispObject* functionObject, LispArguments arguments){
         assert(functionObject.isCallable());
-        if(functionObject.type is LispObject.Type.Object){
-            if(LispObject* constructor = functionObject.attributes.get(this.Constructor)){
-                if(constructor.isCallable()){
-                    return this.invoke(constructor, arguments);
-                }else{
-                    this.logWarning("Type constructor isn't callable.");
-                    return this.newValue(LispObject.Type.Null, constructor);
-                }
+        if(functionObject.isMap()){
+            LispObject* invoke = functionObject.store.map.get(this.Constructor);
+            if(invoke && invoke.isCallable()){
+                return this.invoke(invoke, arguments);
             }else{
-                this.logWarning("Type has no constructor.");
-                return this.newValue(LispObject.Type.Null, functionObject);
+                this.logWarning("Object can't be invoked.");
+                return this.Null;
             }
         }else if(functionObject.type is LispObject.Type.NativeFunction){
             return functionObject.store.nativeFunction(&this, arguments);
