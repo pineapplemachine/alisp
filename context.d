@@ -360,7 +360,7 @@ struct LispContext{
     LispObject* invoke(LispObject* functionObject, LispArguments arguments){
         assert(functionObject.isCallable());
         if(functionObject.isMap()){
-            LispObject* invoke = functionObject.getAttribute(this.Constructor);
+            LispObject* invoke = functionObject.getAttribute(this.Constructor).object;
             if(invoke && invoke.isCallable()){
                 return this.invoke(invoke, arguments);
             }else{

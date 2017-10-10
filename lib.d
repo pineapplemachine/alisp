@@ -1392,33 +1392,47 @@ void registerControlFlow(LispContext* context){
     );
 }
 
+LispObject*[dstring] importedObjects;
+LispObject* importLispModule(LispContext* context, dstring filePath){
+    string importSource = cast(string) ( // Throws FileException
+        Path(filePath).readfrom().asarray()
+    );
+    LispObject* importExpression = void;
+    importExpression = context.parse( // Throws LispParseException
+        importSource, cast(string) filePath.utf8encode().asarray()
+    );
+    LispContext* moduleContext = new LispContext(context);
+    LispObject* moduleObject = moduleContext.evaluate(importExpression);
+    // TODO: normalize paths before putting them in the table
+    importedObjects[filePath] = moduleObject;
+    return moduleObject;
+}
 void registerImport(LispContext* context){
     context.registerFunction("import",
         function LispObject*(LispContext* context, LispArguments args){
-            if(args.length == 0){
-                return context.Null;
+            if(args.length == 0) return context.Null;
+            dstring filePath = context.evaluate(args[0]).stringify();
+            if(LispObject** lispModule = filePath in importedObjects){
+                return *lispModule;
             }
-            LispObject* importTarget = context.evaluate(args[0]);
-            dstring filePath = importTarget.stringify();
-            string importSource;
             try{
-                importSource = cast(string) Path(filePath).readfrom().asarray();
+                return importLispModule(context, filePath);
             }catch(Exception e){
-                context.logWarning("File does not exist.");
+                context.logWarning("Import failed: ", e.msg);
                 return context.Null;
             }
-            LispObject* importExpression = void;
+        }
+    );
+    context.registerFunction("reimport",
+        function LispObject*(LispContext* context, LispArguments args){
+            if(args.length == 0) return context.Null;
+            dstring filePath = context.evaluate(args[0]).stringify();
             try{
-                importExpression = context.parse(
-                    importSource, cast(string) filePath.utf8encode().asarray()
-                );
-            }catch(LispParseException e){
-                context.logWarning("Failed to import file.");
-                context.logWarning(e.msg);
+                return importLispModule(context, filePath);
+            }catch(Exception e){
+                context.logWarning("Import failed: ", e.msg);
                 return context.Null;
             }
-            LispContext* moduleContext = new LispContext(context);
-            return moduleContext.evaluate(importExpression);
         }
     );
 }
