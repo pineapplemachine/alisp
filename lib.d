@@ -112,7 +112,13 @@ void registerTypes(LispContext* context){
         function LispObject*(LispContext* context, LispArguments args){
             if(args.length == 0) return context.Null;
             LispObject* typeObject = context.evaluate(args[0]);
-            return new LispObject(LispObject.Type.Object, typeObject);
+            LispObject* object = new LispObject(LispObject.Type.Object, typeObject);
+            for(size_t i = 1; i + 1 < args.length; i += 2){
+                object.store.map.insert(
+                    context.evaluate(args[i]), context.evaluate(args[i + 1])
+                );
+            }
+            return object;
         }
     );
     context.registerFunction("typeof",
@@ -121,11 +127,11 @@ void registerTypes(LispContext* context){
             return context.evaluate(args[0]).typeObject;
         }
     );
-    context.registerFunction("istype?",
+    context.registerFunction("inherits?",
         function LispObject*(LispContext* context, LispArguments args){
             if(args.length <= 1) return context.Null;
-            LispObject* value = context.evaluate(args[0]);
-            LispObject* type = context.evaluate(args[1]);
+            LispObject* type = context.evaluate(args[0]);
+            LispObject* value = context.evaluate(args[1]);
             return context.boolean(value.instanceOf(type));
         }
     );
@@ -269,11 +275,17 @@ void registerNumberType(LispContext* context){
     context.registerFunction(context.NumberType, "parse",
         function LispObject*(LispContext* context, LispArguments args){
             if(args.length == 0) return context.NaN;
+            LispObject* value = context.evaluate(args[0]);
+            if(value.type is LispObject.Type.Number){
+                return value;
+            }
+            dstring numberString = (value.type is LispObject.Type.Keyword ?
+                value.store.keyword : value.stringify()
+            );
             try{
-                return context.number(
-                    parseNumber(context.evaluate(args[0]).stringify())
-                );
+                return context.number(parseNumber(numberString));
             }catch(Exception e){
+                context.log(e);
                 return context.NaN;
             }
         }
@@ -339,6 +351,30 @@ void registerNumberType(LispContext* context){
             if(args.length == 0) return context.False;
             const number = context.evaluate(args[0]).toNumber();
             return context.boolean(fisnan(number));
+        }
+    );
+    context.registerFunction(context.NumberType, "gt",
+        function LispObject*(LispContext* context, LispArguments args){
+            if(args.length == 0) return context.Null;
+            LispObject* numberObject = context.evaluate(args[0]);
+            for(size_t i = 1; i < args.length; i++){
+                if(compare(context.evaluate(args[i]), numberObject) >= 0){
+                    return context.False;
+                }
+            }
+            return context.True;
+        }
+    );
+    context.registerFunction(context.NumberType, "lt",
+        function LispObject*(LispContext* context, LispArguments args){
+            if(args.length == 0) return context.Null;
+            LispObject* numberObject = context.evaluate(args[0]);
+            for(size_t i = 1; i < args.length; i++){
+                if(compare(numberObject, context.evaluate(args[i])) >= 0){
+                    return context.False;
+                }
+            }
+            return context.True;
         }
     );
 };
@@ -708,11 +744,10 @@ void registerMapType(LispContext* context){
     context.registerFunction(context.MapType, context.Constructor,
         function LispObject*(LispContext* context, LispArguments args){
             LispObject* map = context.map();
-            for(size_t i = 0; i < args.length; i += 2){
-                if(i + 1 >= args.length) break;
-                LispObject* key = context.evaluate(args[i]);
-                LispObject* value = context.evaluate(args[i + 1]);
-                map.store.map.insert(key, value);
+            for(size_t i = 0; i + 1 < args.length; i += 2){
+                map.store.map.insert(
+                    context.evaluate(args[i]), context.evaluate(args[i + 1])
+                );
             }
             return map;
         }
@@ -759,12 +794,10 @@ void registerMapType(LispContext* context){
             }
             LispObject* map = context.evaluate(args[0]);
             if(map.isMap()){
-                for(size_t i = 1; i < args.length; i += 2){
-                    if(i + 1 < args.length){
-                        LispObject* key = context.evaluate(args[i]);
-                        LispObject* value = context.evaluate(args[i + 1]);
-                        map.store.map.insert(key, value);
-                    }
+                for(size_t i = 1; i + 1 < args.length; i += 2){
+                    LispObject* key = context.evaluate(args[i]);
+                    LispObject* value = context.evaluate(args[i + 1]);
+                    map.store.map.insert(key, value);
                 }
             }
             return map;
@@ -892,24 +925,42 @@ void registerObjectType(LispContext* context){
     context.registerFunction(context.ObjectType, context.Constructor,
         function LispObject*(LispContext* context, LispArguments args){
             LispObject* type = context.object();
-            for(size_t i = 0; i < args.length; i += 2){
-                if(i + 1 >= args.length) break;
-                LispObject* key = context.evaluate(args[i]);
-                LispObject* value = context.evaluate(args[i + 1]);
-                type.store.map.insert(key, value);
+            for(size_t i = 0; i + 1 < args.length; i += 2){
+                type.store.map.insert(
+                    context.evaluate(args[i]), context.evaluate(args[i + 1])
+                );
             }
             return type;
         }
     );
-    context.registerFunction(context.ObjectType, "apply", invokeCallable);
 };
 
 void registerNativeFunctionType(LispContext* context){
     context.register("builtin", context.NativeFunctionType);
-    context.registerFunction(context.NativeFunctionType, "apply", invokeCallable);
 };
 
 void registerLispFunctionType(LispContext* context){
+    context.registerFunction("apply",
+        function LispObject*(LispContext* context, LispArguments args){
+            if(args.length == 0){
+                return context.Null;
+            }
+            LispObject* functionObject = context.evaluate(args[0]);
+            if(!functionObject.isCallable()){
+                return context.Null;
+            }
+            if(args.length == 1){
+                return context.invoke(functionObject, []);
+            }
+            LispObject* argumentList = context.evaluate(args[1]);
+            if(!argumentList.isList()){
+                return context.Null;
+            }
+            return context.invoke(
+                functionObject, argumentList.store.list
+            );
+        }
+    );
     context.register("function", context.LispFunctionType);
     context.registerFunction(context.LispFunctionType, context.Constructor,
         function LispObject*(LispContext* context, LispArguments args){
@@ -922,7 +973,6 @@ void registerLispFunctionType(LispContext* context){
             }
         }
     );
-    context.registerFunction(context.LispFunctionType, "apply", invokeCallable);
     context.registerFunction(context.LispFunctionType, "args",
         function LispObject*(LispContext* context, LispArguments args){
             if(args.length == 0) return context.Null;
@@ -958,7 +1008,6 @@ void registerLispMethodType(LispContext* context){
             }
         }
     );
-    context.registerFunction(context.LispMethodType, "apply", invokeCallable);
     context.registerFunction(context.LispMethodType, "context",
         function LispObject*(LispContext* context, LispArguments args){
             if(args.length == 0) return context.Null;
@@ -1013,7 +1062,6 @@ void registerAssignment(LispContext* context){
                     }
                     identity.contextObject.store.map.insert(identity.attribute, value);
                 }else if(!identity.context || identity.context == context){
-                    context.log("No context object");
                     context.inScope.insert(identity.attribute, value);
                 }else{
                     context.logWarning("Invalid identifier.");
@@ -1038,11 +1086,11 @@ void registerAssignment(LispContext* context){
             }
             LispObject* value = context.evaluate(args[1]);
             LispContext.Identity identity = context.identify(args[0]);
-            if(!identity.attribute){
+            if(!identity.value){
                 context.logWarning("Invalid identifier.");
                 return context.Null;
             }else if(identity.contextObject){
-                if(identity.contextObject.type !is LispObject.Type.Object){
+                if(!identity.contextObject.type !is LispObject.Type.Object){
                     context.logWarning("Invalid identifier.");
                     return context.Null;
                 }
@@ -1058,6 +1106,11 @@ void registerAssignment(LispContext* context){
     context.registerFunction("quote",
         function LispObject*(LispContext* context, LispArguments args){
             return args[0];
+        }
+    );
+    context.registerFunction("return",
+        function LispObject*(LispContext* context, LispArguments args){
+            return context.evaluate(args[0]);
         }
     );
 }
@@ -1079,6 +1132,26 @@ void registerComparison(LispContext* context){
             LispObject* first = context.evaluate(args[0]);
             for(size_t i = 1; i < args.length; i++){
                 if(first.identical(context.evaluate(args[i]))) return context.False;
+            }
+            return context.True;
+        }
+    );
+    context.registerFunction("same",
+        function LispObject*(LispContext* context, LispArguments args){
+            if(args.length <= 1) return context.True;
+            LispObject* first = context.evaluate(args[0]);
+            for(size_t i = 1; i < args.length; i++){
+                if(!first.sameKey(context.evaluate(args[i]))) return context.False;
+            }
+            return context.True;
+        }
+    );
+    context.registerFunction("notsame",
+        function LispObject*(LispContext* context, LispArguments args){
+            if(args.length <= 1) return context.False;
+            LispObject* first = context.evaluate(args[0]);
+            for(size_t i = 1; i < args.length; i++){
+                if(first.sameKey(context.evaluate(args[i]))) return context.False;
             }
             return context.True;
         }
@@ -1136,6 +1209,28 @@ void registerComparison(LispContext* context){
             }
         }
     );
+    context.registerFunction("asc",
+        function LispObject*(LispContext* context, LispArguments args){
+            if(args.length == 0) return context.True;
+            LispObject* prev = context.evaluate(args[0]);
+            for(size_t i = 1; i < args.length; i++){
+                LispObject* next = context.evaluate(args[i]);
+                if(compare(prev, next) > 0) return context.False;
+            }
+            return context.True;
+        }
+    );
+    context.registerFunction("desc",
+        function LispObject*(LispContext* context, LispArguments args){
+            if(args.length == 0) return context.True;
+            LispObject* prev = context.evaluate(args[0]);
+            for(size_t i = 1; i < args.length; i++){
+                LispObject* next = context.evaluate(args[i]);
+                if(compare(next, prev) > 0) return context.False;
+            }
+            return context.True;
+        }
+    );
     context.registerFunction("min",
         function LispObject*(LispContext* context, LispArguments args){
             if(args.length == 0) return context.Null;
@@ -1166,6 +1261,12 @@ void registerComparison(LispContext* context){
                 }
             }
             return maximum;
+        }
+    );
+    context.registerFunction("hash",
+        function LispObject*(LispContext* context, LispArguments args){
+            if(args.length == 0) return context.Null;
+            return context.number(context.evaluate(args[0]).toHash());
         }
     );
 }
@@ -1245,11 +1346,14 @@ void registerControlFlow(LispContext* context){
     );
     context.registerFunction("switch",
         function LispObject*(LispContext* context, LispArguments args){
-            for(size_t i = 0; i < args.length; i += 2){
-                if(i + 1 >= args.length) break;
+            size_t i = 0;
+            for(; i + 1 < args.length; i += 2){
                 if(context.evaluate(args[i]).toBoolean()){
                     return context.evaluate(args[i + 1]);
                 }
+            }
+            if(i < args.length){
+                return context.evaluate(args[i]);
             }
             return context.Null;
         }
@@ -1440,6 +1544,18 @@ void registerMath(LispContext* context){
     LispObject* tauObject = context.number(tau);
     context.register("tau", piObject);
     context.register("τ", piObject);
+    context.registerFunction("inc",
+        function LispObject*(LispContext* context, LispArguments args){
+            if(args.length == 0) return context.NaN;
+            return context.number(context.evaluate(args[0]).toNumber() + 1);
+        }
+    );
+    context.registerFunction("dec",
+        function LispObject*(LispContext* context, LispArguments args){
+            if(args.length == 0) return context.NaN;
+            return context.number(context.evaluate(args[0]).toNumber() - 1);
+        }
+    );
     context.registerFunction("sum",
         function LispObject*(LispContext* context, LispArguments args){
             return context.number(

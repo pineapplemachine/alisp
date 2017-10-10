@@ -220,9 +220,12 @@ struct LispObject{
         }
         LispObject* object = &this;
         LispObject* result = null;
-        while(!result && object.typeObject != object){
+        while(true){
             if(object.type is Type.Object){
                 result = object.store.map.get(attribute);
+            }
+            if(result || object.typeObject == object){
+                break;
             }
             object = object.typeObject;
         }

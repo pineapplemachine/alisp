@@ -139,28 +139,32 @@ LispObject* parse(LispContext* context, in string source, in string filePath = "
     bool doubleQuote = false;
     bool lineComment = false;
     bool blockComment = false;
-    bool identifierChain = false; // TODO: This var may be unnecessary
-    bool interruptIdentifier = false;
     void terminateSymbol(in size_t i){
         if(symbolBegin < i){
             const string symbol = source[symbolBegin .. i];
             LispObject* parsedSymbol;
             try{
-                parsedSymbol = parseSymbol(context, symbol, identifierChain);
+                parsedSymbol = parseSymbol(
+                    context, symbol, identifierStack[$ - 1]
+                );
             }catch(Exception e){
                 throw new LispParseException(
                     filePath, symbolLineNumber, e.msg, e
                 );
             }
-            if(identifierStack[$ - 1] && identifierChain && currentNode.store.list.length){
-                currentNode.store.list[$ - 1].store.list ~= parsedSymbol;
-            }else{
-                currentNode.store.list ~= parsedSymbol;
-            }
+            currentNode.store.list ~= parsedSymbol;
         }
         symbolBegin = i + 1;
         symbolLineNumber = lineNumber;
-        identifierChain = false;
+    }
+    void terminateIdentifier(){
+        if(identifierStack[$ - 1]){
+            lineNumberStack.length--;
+            identifierStack.length--;
+            parenStack.length--;
+            nodeStack.length--;
+            currentNode = nodeStack[$ - 1];
+        }
     }
     for(size_t i = 0; i < source.length; i++){
         const ch = source[i];
@@ -205,9 +209,11 @@ LispObject* parse(LispContext* context, in string source, in string filePath = "
             }
         }else if(ch == '\n'){
             terminateSymbol(i);
+            terminateIdentifier();
             lineNumber++;
         }else if(ch == ' ' || ch == '\t'){
             terminateSymbol(i);
+            terminateIdentifier();
         }else if(ch == '\''){
             terminateSymbol(i);
             symbolBegin = i;
@@ -222,19 +228,22 @@ LispObject* parse(LispContext* context, in string source, in string filePath = "
         }else if(ch == '/' && i + 1 < source.length && source[i + 1] == '*'){
             terminateSymbol(i);
             blockComment = true;
-        }else if(ch == ':' && !identifierChain && (
-            symbolBegin != i || !interruptIdentifier
+        }else if(ch == ':' && i > 0 && (
+            source[i - 1] != ' ' && source[i - 1] != '\t' &&
+            source[i - 1] != '\n' && source[i - 1] != '(' &&
+            source[i - 1] != '[' && source[i - 1] != '{'
         )){
             terminateSymbol(i);
-            if(currentNode.store.list.length){
-                if(!identifierStack[$ - 1]){
-                    currentNode.store.list[$ - 1] = context.identifier([
-                        currentNode.store.list[$ - 1]
-                    ]);
-                    identifierStack[$ - 1] = true;
-                }
+            if(!identifierStack[$ - 1] && currentNode.store.list.length){
+                LispObject* lastSymbol = currentNode.store.list[$ - 1];
+                LispObject* newNode = context.identifier([lastSymbol]);
+                currentNode.store.list[$ - 1] = newNode;
+                currentNode = newNode;
+                nodeStack ~= newNode;
+                lineNumberStack ~= lineNumber;
+                identifierStack ~= true;
+                parenStack ~= '\0';
             }
-            identifierChain = true;
         }else if(ch == '(' || ch == '[' || ch == '{'){
             currentNode = context.expression();
             if(ch == '['){
@@ -248,6 +257,8 @@ LispObject* parse(LispContext* context, in string source, in string filePath = "
             parenStack ~= ch;
             symbolBegin = i + 1;
         }else if(ch == ')' || ch == ']' || ch == '}'){
+            terminateSymbol(i);
+            terminateIdentifier();
             if(nodeStack.length <= 1){
                 if(ch == ')'){
                     throw new LispParseException(filePath, lineNumber,
@@ -276,7 +287,6 @@ LispObject* parse(LispContext* context, in string source, in string filePath = "
                     "Mismatched curly braces."
                 );
             }
-            terminateSymbol(i);
             lineNumberStack.length--;
             identifierStack.length--;
             parenStack.length--;
@@ -284,12 +294,9 @@ LispObject* parse(LispContext* context, in string source, in string filePath = "
             nodeStack[$ - 1].store.list ~= currentNode;
             currentNode = nodeStack[$ - 1];
         }
-        interruptIdentifier = (
-            ch == ' ' || ch == '\t' || ch == '\n' ||
-            ch == '(' || ch == '[' || ch == '{'
-        );
     }
     terminateSymbol(source.length);
+    terminateIdentifier();
     if(nodeStack.length > 1){
         throw new LispParseException(
             filePath, lineNumberStack[$ - 1], "Unterminated expression"

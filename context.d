@@ -274,9 +274,9 @@ struct LispContext{
         if(identifier.store.list.length == 0){
             return Identity(&this, this.Null);
         }
-        LispObject* attribute = null;
+        LispObject* attribute = identifier.store.list[0];
         LispObject* lastValue = null;
-        LispObject* value = this.evaluate(identifier.store.list[0]);
+        LispObject* value = this.evaluate(attribute);
         LispContext* context = &this;
         if(value.type is LispObject.Type.Keyword){
             Identity identity = this.identifyInScope(value);
@@ -288,7 +288,7 @@ struct LispContext{
             context = identity.context;
             value = identity.value;
         }
-        bool rootAttribute = void;
+        bool rootAttribute = true;
         for(size_t i = 1; i < identifier.store.list.length; i++){
             attribute = this.evaluate(identifier.store.list[i]);
             auto nextValue = value.getAttribute(attribute);
@@ -346,9 +346,6 @@ struct LispContext{
             return this.Null;
         }
         LispObject* firstObject = this.evaluate(expression.store.list[0]);
-        //if(firstObject.instanceOf(this.IdentifierType)){
-        //    firstObject = this.evaluateIdentifier(firstObject);
-        //}
         if(firstObject.isCallable()){
             return this.invoke(firstObject, expression.store.list[1 .. $]);
         }else if(firstObject.type is LispObject.Type.Null){
@@ -363,7 +360,7 @@ struct LispContext{
     LispObject* invoke(LispObject* functionObject, LispArguments arguments){
         assert(functionObject.isCallable());
         if(functionObject.isMap()){
-            LispObject* invoke = functionObject.store.map.get(this.Constructor);
+            LispObject* invoke = functionObject.getAttribute(this.Constructor);
             if(invoke && invoke.isCallable()){
                 return this.invoke(invoke, arguments);
             }else{
