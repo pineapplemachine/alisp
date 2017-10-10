@@ -40,7 +40,9 @@ class LispParseException: Exception{
     }
 }
 
-LispObject* parseSymbol(LispContext* context, in string symbol){
+LispObject* parseSymbol(
+    LispContext* context, in string symbol, in bool inIdentifier
+){
     if(symbol == "null"){
         return context.Null;
     }else if(symbol == "true"){
@@ -115,7 +117,9 @@ LispObject* parseSymbol(LispContext* context, in string symbol){
                 }
             }
         }
-        return context.identifier(cast(dstring) utf8decode(symbol).asarray());
+    }
+    if(inIdentifier){
+        return context.keyword(cast(dstring) utf8decode(symbol).asarray());
     }else{
         return context.identifier(cast(dstring) utf8decode(symbol).asarray());
     }
@@ -142,7 +146,7 @@ LispObject* parse(LispContext* context, in string source, in string filePath = "
             const string symbol = source[symbolBegin .. i];
             LispObject* parsedSymbol;
             try{
-                parsedSymbol = parseSymbol(context, symbol);
+                parsedSymbol = parseSymbol(context, symbol, identifierChain);
             }catch(Exception e){
                 throw new LispParseException(
                     filePath, symbolLineNumber, e.msg, e
@@ -218,9 +222,10 @@ LispObject* parse(LispContext* context, in string source, in string filePath = "
         }else if(ch == '/' && i + 1 < source.length && source[i + 1] == '*'){
             terminateSymbol(i);
             blockComment = true;
-        }else if(ch == ':' && (symbolBegin != i || !interruptIdentifier)){
+        }else if(ch == ':' && !identifierChain && (
+            symbolBegin != i || !interruptIdentifier
+        )){
             terminateSymbol(i);
-            symbolBegin = i;
             if(currentNode.store.list.length){
                 if(!identifierStack[$ - 1]){
                     currentNode.store.list[$ - 1] = context.identifier([
