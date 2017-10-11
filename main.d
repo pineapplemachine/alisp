@@ -5,7 +5,6 @@ import alisp.obj : LispObject;
 import alisp.parse : parse, LispParseException;
 import alisp.repl : lispRepl;
 
-import alisp.libutils : stringify;
 import alisp.lib : registerBuiltins;
 
 LispContext* getContext(){
@@ -40,7 +39,7 @@ int main(string[] args){
         }
         // Evaluate the file contents
         LispObject* result = context.evaluate(sourceObject);
-        stdio.writeln(result.stringify());
+        stdio.writeln(context.stringify(result));
         return 0;
     }
 }

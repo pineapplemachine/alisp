@@ -280,7 +280,7 @@ void registerNumberType(LispContext* context){
                 return value;
             }
             dstring numberString = (value.type is LispObject.Type.Keyword ?
-                value.store.keyword : value.stringify()
+                value.store.keyword : context.stringify(value)
             );
             try{
                 return context.number(parseNumber(numberString));
@@ -388,7 +388,7 @@ void registerKeywordType(LispContext* context){
             if(value.type is LispObject.Type.Keyword){
                 return value;
             }else{
-                return context.keyword(value.stringify());
+                return context.keyword(context.stringify(value));
             }
         }
     );
@@ -719,16 +719,16 @@ void registerListType(LispContext* context){
     context.registerFunction(context.ListType, "upper",
         function LispObject*(LispContext* context, LispArguments args){
             LispObject* list = context.evaluate(args[0]);
-            return context.list(
-                list.stringify().toUpper().map!(i => context.character(i)).asarray()
+            return context.list(context.stringify(list).toUpper().map!(
+                i => context.character(i)).asarray()
             );
         }
     );
     context.registerFunction(context.ListType, "lower",
         function LispObject*(LispContext* context, LispArguments args){
             LispObject* list = context.evaluate(args[0]);
-            return context.list(
-                list.stringify().toLower().map!(i => context.character(i)).asarray()
+            return context.list(context.stringify(list).toLower().map!(
+                i => context.character(i)).asarray()
             );
         }
     );
@@ -743,8 +743,11 @@ void registerMapType(LispContext* context){
     );
     context.registerFunction(context.MapType, context.Constructor,
         function LispObject*(LispContext* context, LispArguments args){
-            LispObject* map = context.map();
-            for(size_t i = 0; i + 1 < args.length; i += 2){
+            size_t i = args.length & 1;
+            LispObject* map = (i == 0 ? context.map() :
+                new LispObject(LispObject.Type.Object, context.evaluate(args[0]))
+            );
+            for(; i + 1 < args.length; i += 2){
                 map.store.map.insert(
                     context.evaluate(args[i]), context.evaluate(args[i + 1])
                 );
@@ -1042,7 +1045,7 @@ void registerAssignment(LispContext* context){
             if(args.length == 0){
                 return context.Null;
             }else if(!args[0].isList()){
-                context.logWarning("Invalid identifier.");
+                context.invalidIdentifier(args[0]);
                 return context.Null;
             }
             LispObject* value = (args.length > 1 ?
@@ -1053,18 +1056,18 @@ void registerAssignment(LispContext* context){
             }else{
                 LispContext.Identity identity = context.identify(args[0]);
                 if(!identity.attribute){
-                    context.logWarning("Invalid identifier.");
+                    context.invalidIdentifier(args[0]);
                     return context.Null;
                 }else if(identity.contextObject){
                     if(identity.contextObject.type !is LispObject.Type.Object){
-                        context.logWarning("Invalid identifier.");
+                        context.invalidIdentifier(args[0]);
                         return context.Null;
                     }
                     identity.contextObject.store.map.insert(identity.attribute, value);
                 }else if(!identity.context || identity.context == context){
                     context.inScope.insert(identity.attribute, value);
                 }else{
-                    context.logWarning("Invalid identifier.");
+                    context.invalidIdentifier(args[0]);
                     return context.Null;
                 }
             }
@@ -1081,17 +1084,17 @@ void registerAssignment(LispContext* context){
             if(args.length <= 1){
                 return context.Null;
             }else if(!args[0].isList()){
-                context.logWarning("Invalid identifier.");
+                context.invalidIdentifier(args[0]);
                 return context.Null;
             }
             LispObject* value = context.evaluate(args[1]);
             LispContext.Identity identity = context.identify(args[0]);
             if(!identity.value){
-                context.logWarning("Invalid identifier.");
+                context.invalidIdentifier(args[0]);
                 return context.Null;
             }else if(identity.contextObject){
                 if(!identity.contextObject.type !is LispObject.Type.Object){
-                    context.logWarning("Invalid identifier.");
+                    context.invalidIdentifier(args[0]);
                     return context.Null;
                 }
                 identity.contextObject.store.map.insert(identity.attribute, value);
@@ -1411,7 +1414,9 @@ void registerImport(LispContext* context){
     context.registerFunction("import",
         function LispObject*(LispContext* context, LispArguments args){
             if(args.length == 0) return context.Null;
-            dstring filePath = context.evaluate(args[0]).stringify();
+            dstring filePath = context.stringify(
+                context.evaluate(args[0])
+            );
             if(LispObject** lispModule = filePath in importedObjects){
                 return *lispModule;
             }
@@ -1426,7 +1431,9 @@ void registerImport(LispContext* context){
     context.registerFunction("reimport",
         function LispObject*(LispContext* context, LispArguments args){
             if(args.length == 0) return context.Null;
-            dstring filePath = context.evaluate(args[0]).stringify();
+            dstring filePath = context.stringify(
+                context.evaluate(args[0])
+            );
             try{
                 return importLispModule(context, filePath);
             }catch(Exception e){
@@ -1447,15 +1454,19 @@ auto stringifyArgs(LispContext* context, LispArguments args){
     Result result = Result("", context.Null);
     foreach(arg; args){
         result.object = context.evaluate(arg);
-        result.text ~= result.object.stringify();
+        result.text ~= context.stringify(result.object);
     }
     return result;
 }
 void registerStandardIO(LispContext* context){
     context.registerFunction("encode",
         function LispObject*(LispContext* context, LispArguments args){
-            if(args.length == 0) return context.list("null"d);
-            return context.list(context.evaluate(args[0]).toString());
+            if(args.length == 0){
+                return context.Null;
+            }
+            return context.list(
+                context.encode(context.evaluate(args[0]))
+            );
         }
     );
     context.registerFunction("text",
@@ -1478,11 +1489,15 @@ void registerStandardIO(LispContext* context){
     context.registerFunction(fileType, "invoke",
         function LispObject*(LispContext* context, LispArguments args){
             if(args.length == 0) return context.Null;
-            const filePath = context.evaluate(args[0]).stringify();
+            const filePath = context.stringify(
+                context.evaluate(args[0])
+            );
             string mode = "rb";
             size_t fileIndex = openedFiles.length;
             if(args.length > 1){
-                mode = cast(string) context.evaluate(args[1]).stringify();
+                mode = cast(string) context.stringify(
+                    context.evaluate(args[1])
+                );
             }
             try{
                 openedFiles ~= Path(filePath).open(mode).target;
@@ -1514,7 +1529,9 @@ void registerStandardIO(LispContext* context){
             if(fileIndex < openedFiles.length && openedFiles[fileIndex]){
                 auto stream = FileStream(openedFiles[fileIndex]);
                 for(size_t i = 1; i < args.length; i++){
-                    stream.write(context.evaluate(args[i]).stringify().utf8encode());
+                    stream.write(context.stringify(
+                        context.evaluate(args[i])
+                    ).utf8encode());
                 }
                 return fileObject;
             }else{
@@ -1530,7 +1547,9 @@ void registerStandardIO(LispContext* context){
             if(fileIndex < openedFiles.length && openedFiles[fileIndex]){
                 auto stream = FileStream(openedFiles[fileIndex]);
                 for(size_t i = 1; i < args.length; i++){
-                    stream.write(context.evaluate(args[i]).stringify().utf8encode());
+                    stream.write(context.stringify(
+                        context.evaluate(args[i])
+                    ).utf8encode());
                 }
                 stream.write('\n');
                 return fileObject;

@@ -1,14 +1,18 @@
 module alisp.context;
 
-import mach.range : map, asarray;
+import mach.range : map, all, asarray;
+import mach.text.numeric : writefloat;
 import mach.text.text : text;
+import mach.text.utf : utf8decode;
 
 import alisp.map : LispMap;
 import alisp.obj : LispObject, LispArguments, LispFunction, LispMethod, NativeFunction;
+import alisp.parse : encode, LispFloatSettings;
 
 struct LispContext{
     LispContext* parent = null;
     LispContext* root = null;
+    // Map identifier keys to values
     LispMap inScope;
     
     LispObject* BooleanType;
@@ -150,6 +154,41 @@ struct LispContext{
     void logError(T...)(T values){
         this.log("Error: ", values);
     }
+    void invalidIdentifier(LispObject* identifier){
+        this.logError("Invalid identifier ", this.encode(identifier));
+    }
+    
+    dstring encode(LispObject* object){
+        return .encode(&this, object, false);
+    }
+    // Get a human-readable string good for e.g. printing to the console
+    dstring stringify(LispObject* object){
+        switch(object.type){
+            case LispObject.Type.Null:
+                return "null"d;
+            case LispObject.Type.Boolean:
+                return object.store.boolean ? "true"d : "false"d;
+            case LispObject.Type.Character:
+                return cast(dstring) [object.store.character];
+            case LispObject.Type.Number:
+                return cast(dstring) utf8decode(
+                    writefloat!LispFloatSettings(object.store.number)
+                ).asarray();
+            case LispObject.Type.Keyword:
+                return ':' ~ object.store.keyword;
+            case LispObject.Type.List:
+                if(object.store.list.length && object.store.list.all!(
+                    i => i.type is LispObject.Type.Character
+                )){
+                    return cast(dstring) object.store.list.map!(
+                        i => i.store.character
+                    ).asarray();
+                }
+                goto default;
+            default:
+                return this.encode(object);
+        }
+    }
     
     // Functions to create an object of a certain type
     LispObject* newValue(in LispObject.Type type, LispObject* typeObject){
@@ -233,13 +272,15 @@ struct LispContext{
         this.inScope.insert(key, value);
         return value;
     }
-    LispObject* register(in dstring name, LispObject* value){
-        this.inScope.insert(this.keyword(name), value);
-        return value;
+    LispObject* register(in dstring key, LispObject* value){
+        LispObject* keyword = this.keyword(key);
+        LispObject* object = this.register(keyword, value);
+        object.builtinIdentifier = this.identifier([keyword]);
+        return object;
     }
-    LispObject* registerFunction(in dstring name, in NativeFunction value){
+    LispObject* registerFunction(in dstring key, in NativeFunction value){
         LispObject* functionObject = this.nativeFunction(value);
-        this.register(name, functionObject);
+        this.register(key, functionObject);
         return functionObject;
     }
     
@@ -255,7 +296,10 @@ struct LispContext{
         return functionObject;
     }
     LispObject* register(LispObject* withObject, in dstring key, LispObject* value){
-        return this.register(withObject, this.keyword(key), value);
+        LispObject* keyword = this.keyword(key);
+        LispObject* object = this.register(withObject, keyword, value);
+        object.builtinIdentifier = this.identifier([keyword]);
+        return object;
     }
     LispObject* registerFunction(
         LispObject* withObject, in dstring key, in NativeFunction value
@@ -319,6 +363,21 @@ struct LispContext{
             context = context.parent;
         }
         return Identity(null);
+    }
+    
+    LispObject*[] identifyObject(LispObject* object){
+        foreach(pair; this.inScope.asrange()){
+            if(pair.value.identical(object)) return [pair.key];
+        }
+        if(this.parent){
+            return this.parent.identifyObject(object);
+        }
+        foreach(pair; this.inScope.asrange()){
+            if(LispObject*[] path = pair.value.identifyObject(object)){
+                return pair.key ~ path;
+            }
+        }
+        return null;
     }
     
     // Evaluate an object.

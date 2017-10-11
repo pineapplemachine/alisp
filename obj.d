@@ -47,7 +47,9 @@ struct LispFunction{
         }
         if(i < arguments.length){
             functionContext.register(
-                "@"d, parentContext.list(arguments[i .. $])
+                "@"d, parentContext.list(arguments[i .. $].map!(i =>
+                    context.evaluate(i)
+                ).asarray())
             );
         }
         return functionContext.evaluate(this.expressionBody);
@@ -125,6 +127,8 @@ struct LispObject{
     LispObject* typeObject = null;
     // The value of the object
     Store store;
+    
+    LispObject* builtinIdentifier = null;
     
     this(in Type type, LispObject* typeObject){
         this.type = type;
@@ -230,6 +234,21 @@ struct LispObject{
             object = object.typeObject;
         }
         return Result(object == &this, result);
+    }
+    
+    LispObject*[] identifyObject(LispObject* object){
+        if(this.type !is Type.Object){
+            return null;
+        }
+        foreach(pair; this.store.map.asrange()){
+            if(pair.value.identical(object)) return [pair.key];
+        }
+        foreach(pair; this.store.map.asrange()){
+            if(LispObject*[] path = pair.value.identifyObject(object)){
+                return pair.key ~ path;
+            }
+        }
+        return null;
     }
     
     dstring toIdentifierString(){

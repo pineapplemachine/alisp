@@ -8,8 +8,6 @@ import alisp.context : LispContext;
 import alisp.obj : LispObject;
 import alisp.parse : parse, LispParseException;
 
-import alisp.libutils : stringify;
-
 extern(C) void handleSignal(int signal) nothrow @nogc @system{
     exit(0);
 }
@@ -44,11 +42,14 @@ void lispRepl(LispContext* context){
             LispObject* expressionObject = null;
             try{
                 expressionObject = parse(context, expression);
+                //stdio.writeln("Parsed object: ", expressionObject.toString());
             }catch(LispParseException e){
                 stdio.writeln(e.msg);
             }
             if(expressionObject){
-                stdio.writeln(context.evaluate(expressionObject).stringify());
+                stdio.writeln(context.stringify(
+                    context.evaluate(expressionObject)
+                ));
             }
         }
     }
