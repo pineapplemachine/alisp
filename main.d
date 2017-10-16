@@ -10,7 +10,9 @@ import alisp.lib : registerBuiltins;
 LispContext* getContext(){
     LispContext* context = new LispContext(null);
     registerBuiltins(context);
-    context.logFunction = function void(string message){stdio.writeln(message);};
+    context.logFunction = function void(string message){
+        stdio.writeln(message);
+    };
     return context;
 }
 

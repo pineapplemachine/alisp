@@ -35,7 +35,7 @@ struct LispFunction{
     LispObject* expressionBody;
     
     LispObject* evaluate(LispContext* context, LispArguments arguments){
-        LispContext functionContext = new LispContext(this.parentContext);
+        LispContext* functionContext = new LispContext(this.parentContext);
         size_t i = 0;
         for(; i < this.argumentList.length && i < arguments.length; i++){
             functionContext.register(
@@ -122,7 +122,7 @@ struct LispObject{
     }
     
     // What primitive type the stored value is
-    Type type = Type.Null;
+    const Type type = Type.Null;
     // The value representing the type of this one
     LispObject* typeObject = null;
     // The value of the object
@@ -130,56 +130,69 @@ struct LispObject{
     
     LispObject* builtinIdentifier = null;
     
+    this(in Type type){
+        this.type = type;
+    }
     this(in Type type, LispObject* typeObject){
         this.type = type;
-        this.typeObject = typeObject is null ? &this : typeObject;
+        this.typeObject = typeObject;
     }
     this(in Type type, LispObject* typeObject, Store store){
         this.type = type;
-        this.typeObject = typeObject is null ? &this : typeObject;
+        this.typeObject = typeObject;
         this.store = store;
     }
+    
     this(in Boolean boolean, LispObject* typeObject){
+        assert(typeObject);
         this.type = Type.Boolean;
         this.typeObject = typeObject;
         this.store.boolean = boolean;
     }
     this(in Character character, LispObject* typeObject){
+        assert(typeObject);
         this.type = Type.Character;
         this.typeObject = typeObject;
         this.store.character = cast(dchar) character;
     }
     this(in Number number, LispObject* typeObject){
+        assert(typeObject);
         this.type = Type.Number;
         this.typeObject = typeObject;
         this.store.number = number;
     }
     this(in dstring keyword, LispObject* typeObject){
+        assert(typeObject);
         this.type = Type.Keyword;
         this.typeObject = typeObject;
         this.store.keyword = keyword;
     }
     this(List list, LispObject* typeObject){
+        assert(typeObject);
         this.type = Type.List;
         this.typeObject = typeObject;
         this.store.list = list;
     }
     this(Map map, LispObject* typeObject){
+        assert(typeObject);
         this.type = Type.Map;
         this.typeObject = typeObject;
         this.store.map = map;
     }
     this(in NativeFunction nativeFunction, LispObject* typeObject){
+        assert(typeObject);
         this.type = Type.NativeFunction;
         this.typeObject = typeObject;
         this.store.nativeFunction = nativeFunction;
     }
     this(LispFunction lispFunction, LispObject* typeObject){
+        assert(typeObject);
         this.type = Type.LispFunction;
         this.typeObject = typeObject;
         this.store.lispFunction = lispFunction;
     }
     this(LispMethod method, LispObject* typeObject){
+        assert(typeObject);
         this.type = Type.LispMethod;
         this.typeObject = typeObject;
         this.store.lispMethod = method;
@@ -259,7 +272,7 @@ struct LispObject{
         }
     }
     
-    // Get an exact one-to-one string representation.
+    // Get a string representation (e.g. for debugging).
     dstring toString(){
         final switch(this.type){
             case Type.Null:
@@ -272,20 +285,6 @@ struct LispObject{
                 return cast(dstring) writefloat!LispFloatSettings(this.store.number).utf8decode().asarray();
             case Type.Keyword:
                 return dchar(':') ~ this.store.keyword;
-            //case Type.Identifier:
-            //    if(this.store.list.length == 0){
-            //        return "(identifier)"d;
-            //    }
-            //    dstring str = cast(dstring)(
-            //        this.store.list.map!(
-            //            i => i.toIdentifierString()
-            //        ).join(":"d).asarray()
-            //    );
-            //    return str[0] == ':' ? str[1 .. $] : str;
-            //case Type.Expression:
-            //    return dchar('(') ~ cast(dstring)(
-            //            this.store.list.map!(i => i.toString()).join(" "d).asarray()
-            //    ) ~ dchar(')');
             case Type.List:
                 if(
                     this.store.list.length &&
@@ -318,7 +317,11 @@ struct LispObject{
                     ) ~ dchar(')');
                 }
             case Type.NativeFunction:
-                return "(builtin)"d;
+                if(this.builtinIdentifier){
+                    return "(builtin " ~ this.builtinIdentifier.toString() ~ ")";
+                }else{
+                    return "(builtin)"d;
+                }
             case Type.LispFunction:
                 return cast(dstring) ("(function ["d ~
                     this.store.lispFunction.argumentList.map!(i =>

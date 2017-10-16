@@ -50,6 +50,7 @@ struct LispContext{
     }
     
     bool isLiteralType(LispObject* object){
+        assert(object);
         return (
             object.typeObject == this.Null ||
             object.typeObject == this.BooleanType ||
@@ -61,6 +62,7 @@ struct LispContext{
     // Objects returning true absolutely must be copied
     // before they are changed in any way.
     bool isSharedLiteral(LispObject* object){
+        assert(object);
         return (
             object == this.Null ||
             object == this.True ||
@@ -109,15 +111,16 @@ struct LispContext{
         this.NullCharacter = new LispObject(cast(dchar) 0, this.CharacterType);
         this.Zero = new LispObject(0, this.NumberType);
         this.One = new LispObject(1, this.NumberType);
-        this.PosInfinity = new LispObject(LispObject.Number.infinity, this.NumberType);
+        this.PosInfinity = new LispObject(+LispObject.Number.infinity, this.NumberType);
         this.NegInfinity = new LispObject(-LispObject.Number.infinity, this.NumberType);
-        this.PosNaN = new LispObject(LispObject.Number.nan, this.NumberType);
+        this.PosNaN = new LispObject(+LispObject.Number.nan, this.NumberType);
         this.NegNaN = new LispObject(-LispObject.Number.nan, this.NumberType);
         // Initialize common objects
         this.Constructor = this.keyword("invoke"d);
     }
     
     void inheritFrom(LispContext* parent){
+        assert(parent);
         this.BooleanType = parent.BooleanType;
         this.CharacterType = parent.CharacterType;
         this.NumberType = parent.NumberType;
@@ -159,10 +162,12 @@ struct LispContext{
     }
     
     dstring encode(LispObject* object){
+        assert(object);
         return .encode(&this, object, false);
     }
     // Get a human-readable string good for e.g. printing to the console
     dstring stringify(LispObject* object){
+        assert(object);
         switch(object.type){
             case LispObject.Type.Null:
                 return "null"d;
@@ -269,6 +274,7 @@ struct LispContext{
     }
     
     LispObject* register(LispObject* key, LispObject* value){
+        assert(key && value);
         this.inScope.insert(key, value);
         return value;
     }
@@ -285,6 +291,7 @@ struct LispContext{
     }
     
     LispObject* register(LispObject* withObject, LispObject* key, LispObject* value){
+        assert(withObject && key && value);
         withObject.store.map.insert(key, value);
         return value;
     }
@@ -314,7 +321,7 @@ struct LispContext{
         LispObject* attribute;
     }
     Identity identify(LispObject* identifier){
-        assert(identifier.isList());
+        assert(identifier && identifier.isList());
         if(identifier.store.list.length == 0){
             return Identity(&this, this.Null);
         }
@@ -355,6 +362,7 @@ struct LispContext{
         }
     }
     Identity identifyInScope(LispObject* key){
+        assert(key);
         LispContext* context = &this;
         while(context){
             if(LispObject* value = context.inScope.get(key)){
@@ -366,6 +374,7 @@ struct LispContext{
     }
     
     LispObject*[] identifyObject(LispObject* object){
+        assert(object);
         foreach(pair; this.inScope.asrange()){
             if(pair.value.identical(object)) return [pair.key];
         }
@@ -382,6 +391,7 @@ struct LispContext{
     
     // Evaluate an object.
     LispObject* evaluate(LispObject* object){
+        assert(object);
         if(object.instanceOf(this.IdentifierType)){
             return this.evaluateIdentifier(object);
         }else if(!object.instanceOf(this.ExpressionType)){
@@ -391,7 +401,7 @@ struct LispContext{
         }
     }
     LispObject* evaluateIdentifier(LispObject* identifier){
-        assert(identifier.isList());
+        assert(identifier && identifier.isList());
         Identity identity = this.identify(identifier);
         if(identity.value){
             return identity.value;
@@ -400,7 +410,7 @@ struct LispContext{
         return this.Null;
     }
     LispObject* evaluateExpression(LispObject* expression){
-        assert(expression.isList());
+        assert(expression && expression.isList());
         if(expression.store.list.length == 0){
             return this.Null;
         }
@@ -417,7 +427,7 @@ struct LispContext{
     
     // Invoke a callable object.
     LispObject* invoke(LispObject* functionObject, LispArguments arguments){
-        assert(functionObject.isCallable());
+        assert(functionObject && functionObject.isCallable());
         if(functionObject.isMap()){
             LispObject* invoke = functionObject.getAttribute(this.Constructor).object;
             if(invoke && invoke.isCallable()){
