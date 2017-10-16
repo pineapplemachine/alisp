@@ -4,6 +4,8 @@ import mach.math : pow2d;
 
 import alisp.obj : LispObject;
 
+import mach.io.stdio;
+
 bool mapsEqual(
     alias compareValues = (a, b) => a.sameKey(b)
 )(LispMap a, LispMap b){
@@ -12,6 +14,7 @@ bool mapsEqual(
     }
     foreach(LispMap.Bucket aBucket; a.buckets){
         foreach(LispMap.KeyValuePair aPair; aBucket){
+            assert(aPair.key && aPair.value);
             if(LispObject* bValue = b.get(aPair.key)){
                 if(!compareValues(aPair.value, bValue)) return false;
             }else{
@@ -21,6 +24,7 @@ bool mapsEqual(
     }
     foreach(LispMap.Bucket bBucket; b.buckets){
         foreach(LispMap.KeyValuePair bPair; bBucket){
+            assert(bPair.key && bPair.value);
             if(!a.get(bPair.key)) return false;
         }
     }
@@ -71,6 +75,7 @@ struct LispMap{
     }
     
     LispObject* insert(LispObject* key, LispObject* value){
+        assert(key && value);
         return this.insert(KeyValuePair(key.toHash(), key, value));
     }
     LispObject* insert(KeyValuePair insertPair){
@@ -97,12 +102,14 @@ struct LispMap{
     }
     
     LispObject* get(LispObject* key){
+        assert(key);
         if(!this.buckets.length){
             return null;
         }
         const keyHash = key.toHash();
         Bucket bucket = this.buckets[keyHash & this.hashMask];
         foreach(KeyValuePair pair; bucket){
+            assert(pair.key && pair.value);
             if(keyHash == pair.keyHash && key.sameKey(pair.key)){
                 return pair.value;
             }
@@ -111,6 +118,7 @@ struct LispMap{
     }
     
     LispObject* remove(LispObject* key){
+        assert(key);
         if(!this.buckets.length){
             return null;
         }
@@ -119,6 +127,7 @@ struct LispMap{
         Bucket bucket = this.buckets[bucketIndex];
         for(size_t i = 0; i < bucket.length; i++){
             KeyValuePair pair = bucket[i];
+            assert(pair.key && pair.value);
             if(keyHash == pair.keyHash && key.sameKey(pair.key)){
                 this.buckets[bucketIndex] = (
                     this.buckets[bucketIndex][0 .. i] ~
@@ -129,6 +138,14 @@ struct LispMap{
             }
         }
         return null;
+    }
+    
+    void clear(){
+        foreach(Bucket bucket; this.buckets){
+            bucket.length = 0;
+        }
+        this.length = 0;
+        this.longestBucket = &this.buckets[0];
     }
     
     bool opEquals(LispMap map){
@@ -146,7 +163,12 @@ struct LispMapRange{
     
     this(LispMap lispMap){
         this.lispMap = lispMap;
-        while(this.i < lispMap.buckets.length && !lispMap.buckets[this.i].length){
+        if(lispMap.buckets.length > 1000) assert(false);
+        if(lispMap.buckets.length && lispMap.buckets[0].length > 1000) assert(false);
+        while(
+            this.i < lispMap.buckets.length &&
+            lispMap.buckets[this.i].length == 0
+        ){
             this.i++;
         }
     }
@@ -156,6 +178,8 @@ struct LispMapRange{
     }
     
     @property LispMap.KeyValuePair front(){
+        assert(this.i < this.lispMap.buckets.length);
+        assert(this.j < this.lispMap.buckets[this.i].length);
         return this.lispMap.buckets[this.i][this.j];
     }
     
@@ -164,7 +188,10 @@ struct LispMapRange{
         if(this.j >= this.lispMap.buckets[this.i].length){
             this.j = 0;
             this.i++;
-            while(this.i < lispMap.buckets.length && !lispMap.buckets[this.i].length){
+            while(
+                this.i < this.lispMap.buckets.length &&
+                this.lispMap.buckets[this.i].length == 0
+            ){
                 this.i++;
             }
         }

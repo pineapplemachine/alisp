@@ -106,6 +106,8 @@ Map literals are contained within balanced curly braces "{}". The pairs of objec
 
 `number:NaN? [:number]`
 
+`number:range [:from :until :body]`
+
 `keyword`
 
 `keyword:constructor [:string]`
@@ -206,13 +208,13 @@ Map literals are contained within balanced curly braces "{}". The pairs of objec
 
 `builtin`
 
-`builtin:call [:builtin]`
+`builtin:apply [:builtin]`
 
 `function`
 
 `function:constructor [:args :body]`
 
-`function:call [:function]`
+`function:apply [:function]`
 
 `function:args [:function]`
 
@@ -222,7 +224,7 @@ Map literals are contained within balanced curly braces "{}". The pairs of objec
 
 `method:constructor [:context :function]`
 
-`method:call [:method]`
+`method:apply [:method]`
 
 `method:context [:method]`
 
@@ -232,9 +234,43 @@ Map literals are contained within balanced curly braces "{}". The pairs of objec
 
 `typeof [:value]` returns the type object which represents the type of the input.
 
+`null?`
+
+`boolean?`
+
+`character?`
+
+`number?`
+
+`keyword?`
+
+`identifier?`
+
+`expression?`
+
+`list?`
+
+`map?`
+
+`type?`
+
+`builtin?`
+
+`function?`
+
+`method?`
+
+`listlike?`
+
+`maplike?`
+
+`callable?`
+
 `let [identifier :value]`
 
 `set [identifier :value]`
+
+`quote [:object]`
 
 `is [:first @rest]` returns `true` when all of the inputs are exactly identical, or when there were one or fewer arguments. Returns `false` otherwise. Collections such as lists and maps are identical to themselves, but not to copies or other collections with identical contents.
 

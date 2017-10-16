@@ -14,6 +14,7 @@ import mach.text.utf : utf8encode;
 import std.uni : toUpper, toLower;
 
 import alisp.context : LispContext;
+import alisp.list : LispList;
 import alisp.obj : LispObject, LispArguments, LispFunction, LispMethod;
 import alisp.parse : parse, LispParseException;
 
@@ -22,7 +23,7 @@ import alisp.libutils;
 auto listLength = function LispObject*(LispContext* context, LispArguments args){
     LispObject* list = context.evaluate(args[0]);
     if(list.isList()){
-        return context.number(list.store.list.length);
+        return context.number(list.listLength);
     }else{
         return context.NaN;
     }
@@ -30,7 +31,7 @@ auto listLength = function LispObject*(LispContext* context, LispArguments args)
 auto listEmpty = function LispObject*(LispContext* context, LispArguments args){
     LispObject* list = context.evaluate(args[0]);
     if(list.isList()){
-        return context.boolean(list.store.list.length == 0);
+        return context.boolean(list.listLength == 0);
     }else{
         return context.Null;
     }
@@ -38,7 +39,7 @@ auto listEmpty = function LispObject*(LispContext* context, LispArguments args){
 auto mapLength = function LispObject*(LispContext* context, LispArguments args){
     LispObject* map = context.evaluate(args[0]);
     if(map.isMap()){
-        return context.number(map.store.map.length);
+        return context.number(map.mapLength);
     }else{
         return context.NaN;
     }
@@ -46,7 +47,7 @@ auto mapLength = function LispObject*(LispContext* context, LispArguments args){
 auto mapEmpty = function LispObject*(LispContext* context, LispArguments args){
     LispObject* map = context.evaluate(args[0]);
     if(map.isMap()){
-        return context.boolean(map.store.map.length == 0);
+        return context.boolean(map.mapLength == 0);
     }else{
         return context.Null;
     }
@@ -67,7 +68,7 @@ auto invokeCallable = function LispObject*(LispContext* context, LispArguments a
         return context.Null;
     }
     return context.invoke(
-        functionObject, argumentList.store.list
+        functionObject, argumentList.store.list.objects
     );
 };
 
@@ -112,9 +113,11 @@ void registerTypes(LispContext* context){
         function LispObject*(LispContext* context, LispArguments args){
             if(args.length == 0) return context.Null;
             LispObject* typeObject = context.evaluate(args[0]);
-            LispObject* object = new LispObject(LispObject.Type.Object, typeObject);
+            LispObject* object = new LispObject(
+                LispObject.Type.Object, typeObject
+            );
             for(size_t i = 1; i + 1 < args.length; i += 2){
-                object.store.map.insert(
+                object.insert(
                     context.evaluate(args[i]), context.evaluate(args[i + 1])
                 );
             }
@@ -254,12 +257,12 @@ void registerCharacterType(LispContext* context){
     );
     context.registerFunction(context.CharacterType, "upper",
         function LispObject*(LispContext* context, LispArguments args){
-            return context.character(toUpper(args[0].store.character));
+            return context.character(toUpper(args[0].character));
         }
     );
     context.registerFunction(context.CharacterType, "lower",
         function LispObject*(LispContext* context, LispArguments args){
-            return context.character(toLower(args[0].store.character));
+            return context.character(toLower(args[0].character));
         }
     );
 };
@@ -280,7 +283,7 @@ void registerNumberType(LispContext* context){
                 return value;
             }
             dstring numberString = (value.type is LispObject.Type.Keyword ?
-                value.store.keyword : context.stringify(value)
+                value.keyword : context.stringify(value)
             );
             try{
                 return context.number(parseNumber(numberString));
@@ -400,7 +403,7 @@ void registerIdentifierType(LispContext* context){
         function LispObject*(LispContext* context, LispArguments args){
             LispObject* identifier = context.identifier();
             foreach(arg; args){
-                identifier.store.list ~= context.evaluate(arg);
+                identifier.push(context.evaluate(arg));
             }
             return identifier;
         }
@@ -420,7 +423,7 @@ void registerExpressionType(LispContext* context){
     context.registerFunction(context.ExpressionType, context.Constructor,
         function LispObject*(LispContext* context, LispArguments args){
             LispObject* expression = context.expression();
-            foreach(arg; args) expression.store.list ~= context.evaluate(arg);
+            foreach(arg; args) expression.push(context.evaluate(arg));
             return expression;
         }
     );
@@ -439,7 +442,7 @@ void registerListType(LispContext* context){
     context.registerFunction(context.ListType, context.Constructor,
         function LispObject*(LispContext* context, LispArguments args){
             LispObject* list = context.list();
-            foreach(arg; args) list.store.list ~= context.evaluate(arg);
+            foreach(arg; args) list.push(context.evaluate(arg));
             return list;
         }
     );
@@ -454,7 +457,7 @@ void registerListType(LispContext* context){
             const index = cast(size_t) floatIndex;
             if(
                 !list.isList() || index != floatIndex ||
-                index >= list.store.list.length
+                index >= list.listLength
             ){
                 return context.Null;
             }else{
@@ -469,12 +472,11 @@ void registerListType(LispContext* context){
             const floatIndex = context.evaluate(args[1]).toNumber();
             if(floatIndex < 0) return list;
             const index = cast(size_t) floatIndex;
-            if(list.isList() && index == floatIndex && index <= list.store.list.length){
-                list.store.list = (
-                    list.store.list[0 .. index] ~
-                    args[2 .. $].map!(i => context.evaluate(i)).asarray() ~
-                    list.store.list[index .. $]
+            if(list.isList() && index == floatIndex && index <= list.listLength){
+                LispObject*[] insertions = (
+                    args[2 .. $].map!(i => context.evaluate(i)).asarray()
                 );
+                list.list.insert(index, insertions);
             }
             return list;
         }
@@ -486,10 +488,8 @@ void registerListType(LispContext* context){
             const floatIndex = context.evaluate(args[1]).toNumber();
             if(floatIndex < 0) return list;
             const index = cast(size_t) floatIndex;
-            if(list.isList() && index == floatIndex && index <= list.store.list.length){
-                list.store.list = (
-                    list.store.list[0 .. index] ~ list.store.list[index .. $]
-                );
+            if(list.isList() && index == floatIndex && index <= list.listLength){
+                list.list.remove(index);
             }
             return list;
         }
@@ -500,7 +500,7 @@ void registerListType(LispContext* context){
             LispObject* list = context.evaluate(args[0]);
             if(list.isList()){
                 for(size_t i = 1; i < args.length; i++){
-                    list.store.list ~= context.evaluate(args[i]);
+                    list.push(context.evaluate(args[i]));
                 }
             }
             return list;
@@ -510,12 +510,10 @@ void registerListType(LispContext* context){
         function LispObject*(LispContext* context, LispArguments args){
             if(args.length == 0) return context.Null;
             LispObject* list = context.evaluate(args[0]);
-            if(!list.isList() || list.store.list.length == 0){
+            if(!list.isList() || list.listLength == 0){
                 return context.Null;
             }else{
-                LispObject* value = list.store.list[$ - 1];
-                list.store.list.length -= 1;
-                return value;
+                return list.list.pop();
             }
         }
     );
@@ -528,7 +526,7 @@ void registerListType(LispContext* context){
             }
             LispObject.Number low = 0;
             LispObject.Number high = (
-                cast(LispObject.Number) list.store.list.length
+                cast(LispObject.Number) list.listLength
             );
             if(args.length > 1){
                 low = context.evaluate(args[1]).toNumber();
@@ -547,38 +545,38 @@ void registerListType(LispContext* context){
             }
             if(highInt <= lowInt){
                 return context.list();
-            }else if(highInt < 0 || lowInt >= list.store.list.length){
-                return context.list(repeatNull(highInt - lowInt));
-            }else if(lowInt >= 0 && highInt <= list.store.list.length){
+            }else if(highInt < 0 || lowInt >= list.listLength){
+                return context.list(LispList(repeatNull(highInt - lowInt)));
+            }else if(lowInt >= 0 && highInt <= list.listLength){
                 return context.list(list.store.list[
                     cast(size_t) lowInt .. cast(size_t) highInt
                 ]);
             }else if(lowInt >= 0){
-                return context.list(
-                    list.store.list[cast(size_t) lowInt .. $] ~
-                    repeatNull(cast(size_t) highInt - list.store.list.length)
-                );
-            }else if(highInt <= list.store.list.length){
-                return context.list(
+                return context.list(LispList(
+                    list.list[cast(size_t) lowInt .. $].objects ~
+                    repeatNull(cast(size_t) highInt - list.listLength)
+                ));
+            }else if(highInt <= list.listLength){
+                return context.list(LispList(
                     repeatNull(cast(size_t) -lowInt) ~
-                    list.store.list[0 .. cast(size_t) highInt]
-                );
+                    list.list[0 .. cast(size_t) highInt].objects
+                ));
             }else{
-                return context.list(
-                    repeatNull(cast(size_t) -lowInt) ~ list.store.list ~
-                    repeatNull(cast(size_t) highInt - list.store.list.length)
-                );
+                return context.list(LispList(
+                    repeatNull(cast(size_t) -lowInt) ~ list.list.copy().objects ~
+                    repeatNull(cast(size_t) highInt - list.listLength)
+                ));
             }
         }
     );
     context.registerFunction(context.ListType, "concat",
         function LispObject*(LispContext* context, LispArguments args){
-            LispObject*[] objects;
+            LispList result;
             foreach(arg; args){
                 LispObject* argObject = context.evaluate(arg);
-                if(argObject.isList()) objects ~= argObject.store.list;
+                if(argObject.isList()) result.extend(argObject.list);
             }
-            return context.list(objects);
+            return context.list(result);
         }
     );
     context.registerFunction(context.ListType, "extend",
@@ -588,7 +586,7 @@ void registerListType(LispContext* context){
             if(list.isList()){
                 for(size_t i = 1; i < args.length; i++){
                     LispObject* argObject = context.evaluate(args[i]);
-                    if(argObject.isList()) list.store.list ~= argObject.store.list;
+                    if(argObject.isList()) list.list.extend(argObject.list);
                 }
             }
             return list;
@@ -598,9 +596,7 @@ void registerListType(LispContext* context){
         function LispObject*(LispContext* context, LispArguments args){
             if(args.length == 0) return context.Null;
             LispObject* list = context.evaluate(args[0]);
-            if(list.isList()){
-                list.store.list.length = 0;
-            }
+            if(list.isList()) list.list.clear();
             return list;
         }
     );
@@ -609,12 +605,12 @@ void registerListType(LispContext* context){
             if(args.length == 0) return context.Null;
             LispObject* list = context.evaluate(args[0]);
             if(list.isList()){
-                for(size_t i = 0; i < list.store.list.length / 2; i++){
+                for(size_t i = 0; i < list.listLength / 2; i++){
                     LispObject* t = list.store.list[i];
                     list.store.list[i] = (
-                        list.store.list[list.store.list.length - i - 1]
+                        list.store.list[list.listLength - i - 1]
                     );
-                    list.store.list[list.store.list.length - i - 1] = t;
+                    list.store.list[list.listLength - i - 1] = t;
                 }
             }
             return list;
@@ -630,10 +626,10 @@ void registerListType(LispContext* context){
                     if(sortFunction.isCallable()){
                         mergesort!((a, b) =>
                             context.invoke(sortFunction, [a, b]).toBoolean()
-                        )(list.store.list);
+                        )(list.list.objects);
                     }
                 }else{
-                    mergesort!((a, b) => compare(a, b) < 0)(list.store.list);
+                    mergesort!((a, b) => compare(a, b) < 0)(list.list.objects);
                 }
             }
             return list;
@@ -651,7 +647,7 @@ void registerListType(LispContext* context){
                 return context.Null;
             }
             LispObject* result = context.Null;
-            for(size_t i = 0; i < list.store.list.length; i++){
+            for(size_t i = 0; i < list.listLength; i++){
                 result = context.invoke(callback, [list.store.list[i]]);
             }
             return result;
@@ -668,8 +664,8 @@ void registerListType(LispContext* context){
             if(!transform.isCallable()){
                 return context.Null;
             }
-            LispObject*[] newList = new LispObject*[list.store.list.length];
-            for(size_t i = 0; i < list.store.list.length; i++){
+            LispObject*[] newList = new LispObject*[list.listLength];
+            for(size_t i = 0; i < list.listLength; i++){
                 newList[i] = context.invoke(transform, [list.store.list[i]]);
             }
             return context.list(newList);
@@ -687,7 +683,7 @@ void registerListType(LispContext* context){
                 return context.Null;
             }
             LispObject*[] newList;
-            for(size_t i = 0; i < list.store.list.length; i++){
+            for(size_t i = 0; i < list.listLength; i++){
                 bool match = context.invoke(filter, [list.store.list[i]]).toBoolean();
                 if(match) newList ~= list.store.list[i];
             }
@@ -698,17 +694,17 @@ void registerListType(LispContext* context){
         function LispObject*(LispContext* context, LispArguments args){
             if(args.length == 0) return context.Null;
             LispObject* list = context.evaluate(args[0]);
-            if(args.length == 1 || !list.isList() || list.store.list.length == 0){
+            if(args.length == 1 || !list.isList() || list.listLength == 0){
                 return context.Null;
             }
             LispObject* combine = context.evaluate(args[1]);
             if(!combine.isCallable()){
                 return context.Null;
-            }else if(list.store.list.length == 1){
+            }else if(list.listLength == 1){
                 return list.store.list[0];
             }
             LispObject* accumulator = list.store.list[0];
-            for(size_t i = 1; i < list.store.list.length; i++){
+            for(size_t i = 1; i < list.listLength; i++){
                 accumulator = context.invoke(combine, [
                     accumulator, list.store.list[i]
                 ]);
@@ -744,11 +740,11 @@ void registerMapType(LispContext* context){
     context.registerFunction(context.MapType, context.Constructor,
         function LispObject*(LispContext* context, LispArguments args){
             size_t i = args.length & 1;
-            LispObject* map = (i == 0 ? context.map() :
-                new LispObject(LispObject.Type.Object, context.evaluate(args[0]))
-            );
+            LispObject* map = (i == 0 ? context.map() : new LispObject(
+                LispObject.Type.Object, context.evaluate(args[0])
+            ));
             for(; i + 1 < args.length; i += 2){
-                map.store.map.insert(
+                map.insert(
                     context.evaluate(args[i]), context.evaluate(args[i + 1])
                 );
             }
@@ -770,7 +766,7 @@ void registerMapType(LispContext* context){
             }
             for(size_t i = 1; i < args.length; i++){
                 LispObject* key = context.evaluate(args[i]);
-                if(!map.store.map.get(key)) return context.False;
+                if(!map.get(key)) return context.False;
             }
             return context.True;
         }
@@ -783,7 +779,7 @@ void registerMapType(LispContext* context){
             LispObject* map = context.evaluate(args[0]);
             if(map.isMap()){
                 LispObject* key = context.evaluate(args[1]);
-                LispObject* value = map.store.map.get(key);
+                LispObject* value = map.get(key);
                 return value ? value : context.Null;
             }else{
                 return context.Null;
@@ -800,7 +796,7 @@ void registerMapType(LispContext* context){
                 for(size_t i = 1; i + 1 < args.length; i += 2){
                     LispObject* key = context.evaluate(args[i]);
                     LispObject* value = context.evaluate(args[i + 1]);
-                    map.store.map.insert(key, value);
+                    map.insert(key, value);
                 }
             }
             return map;
@@ -817,7 +813,7 @@ void registerMapType(LispContext* context){
             }
             for(size_t i = 1; i < args.length; i++){
                 LispObject* key = context.evaluate(args[i]);
-                map.store.map.remove(key);
+                map.remove(key);
             }
             return map;
         }
@@ -834,7 +830,7 @@ void registerMapType(LispContext* context){
                 return context.Null;
             }
             LispObject* result = context.Null;
-            foreach(pair; map.store.map.asrange()){
+            foreach(pair; map.maprange()){
                 result = context.invoke(callback, [pair.key, pair.value]);
             }
             return result;
@@ -848,7 +844,7 @@ void registerMapType(LispContext* context){
                 return context.Null;
             }
             LispObject*[] list;
-            foreach(pair; map.store.map.asrange()){
+            foreach(pair; map.maprange()){
                 list ~= pair.key;
             }
             return context.list(list);
@@ -862,7 +858,7 @@ void registerMapType(LispContext* context){
                 return context.Null;
             }
             LispObject*[] list;
-            foreach(pair; map.store.map.asrange()){
+            foreach(pair; map.maprange()){
                 list ~= pair.value;
             }
             return context.list(list);
@@ -873,7 +869,7 @@ void registerMapType(LispContext* context){
             if(args.length == 0) return context.Null;
             LispObject* map = context.evaluate(args[0]);
             if(map.isMap()){
-                foreach(pair; map.store.map.asrange()){
+                foreach(pair; map.maprange()){
                     context.register(pair.key, pair.value);
                 }
             }
@@ -886,8 +882,8 @@ void registerMapType(LispContext* context){
             foreach(arg; args){
                 LispObject* argObject = context.evaluate(arg);
                 if(argObject.isMap()){
-                    foreach(pair; argObject.store.map.asrange()){
-                        map.store.map.insert(pair.key, pair.value);
+                    foreach(pair; argObject.maprange()){
+                        map.insert(pair.key, pair.value);
                     }
                 }
             }
@@ -902,8 +898,8 @@ void registerMapType(LispContext* context){
                 for(size_t i = 1; i < args.length; i++){
                     LispObject* argObject = context.evaluate(args[i]);
                     if(argObject.isMap()){
-                        foreach(pair; argObject.store.map.asrange()){
-                            map.store.map.insert(pair.key, pair.value);
+                        foreach(pair; argObject.maprange()){
+                            map.insert(pair.key, pair.value);
                         }
                     }
                 }
@@ -929,7 +925,7 @@ void registerObjectType(LispContext* context){
         function LispObject*(LispContext* context, LispArguments args){
             LispObject* type = context.object();
             for(size_t i = 0; i + 1 < args.length; i += 2){
-                type.store.map.insert(
+                type.insert(
                     context.evaluate(args[i]), context.evaluate(args[i + 1])
                 );
             }
@@ -960,7 +956,7 @@ void registerLispFunctionType(LispContext* context){
                 return context.Null;
             }
             return context.invoke(
-                functionObject, argumentList.store.list
+                functionObject, argumentList.list.objects
             );
         }
     );
@@ -970,9 +966,9 @@ void registerLispFunctionType(LispContext* context){
             if(args.length == 0) return context.Null;
             LispObject* argumentNames = context.evaluate(args[0]);
             if(!argumentNames.isList()){
-                return context.lispFunction(context.list(), args[1]);
+                return context.newLispFunction(context.list(), args[1]);
             }else{
-                return context.lispFunction(argumentNames, args[1]);
+                return context.newLispFunction(argumentNames, args[1]);
             }
         }
     );
@@ -1005,8 +1001,9 @@ void registerLispMethodType(LispContext* context){
             if(!functionObject.isCallable()){
                 return context.Null;
             }else{
+                LispObject* contextObject = context.evaluate(args[0]);
                 return context.lispMethod(LispMethod(
-                    context.evaluate(args[0]), functionObject
+                    contextObject, functionObject
                 ));
             }
         }
@@ -1063,7 +1060,7 @@ void registerAssignment(LispContext* context){
                         context.invalidIdentifier(args[0]);
                         return context.Null;
                     }
-                    identity.contextObject.store.map.insert(identity.attribute, value);
+                    identity.contextObject.insert(identity.attribute, value);
                 }else if(!identity.context || identity.context == context){
                     context.inScope.insert(identity.attribute, value);
                 }else{
@@ -1097,7 +1094,7 @@ void registerAssignment(LispContext* context){
                     context.invalidIdentifier(args[0]);
                     return context.Null;
                 }
-                identity.contextObject.store.map.insert(identity.attribute, value);
+                identity.contextObject.insert(identity.attribute, value);
             }else if(identity.context){
                 identity.context.inScope.insert(identity.attribute, value);
             }else{
@@ -1404,7 +1401,7 @@ LispObject* importLispModule(LispContext* context, dstring filePath){
     importExpression = context.parse( // Throws LispParseException
         importSource, cast(string) filePath.utf8encode().asarray()
     );
-    LispContext* moduleContext = new LispContext(context);
+    LispContext* moduleContext = context.newChildContext();
     LispObject* moduleObject = moduleContext.evaluate(importExpression);
     // TODO: normalize paths before putting them in the table
     importedObjects[filePath] = moduleObject;
@@ -1501,7 +1498,9 @@ void registerStandardIO(LispContext* context){
             }
             try{
                 openedFiles ~= Path(filePath).open(mode).target;
-                return new LispObject(cast(LispObject.Number) fileIndex, fileType);
+                return new LispObject(
+                    cast(LispObject.Number) fileIndex, fileType
+                );
             }catch(Exception e){
                 return context.Null;
             }

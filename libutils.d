@@ -23,15 +23,16 @@ bool numberLikeBoolean(in LispObject.Number number, in LispObject.Boolean boolea
 }
 
 LispObject.Boolean toBoolean(LispObject* value){
+    assert(value);
     final switch(value.type){
         case Type.Null:
             return false;
         case Type.Boolean: 
-            return value.store.boolean;
+            return value.boolean;
         case Type.Character:
-            return value.store.character != 0;
+            return value.character != 0;
         case Type.Number:
-            return value.store.number != 0 && !fisnan(value.store.number);
+            return value.number != 0 && !fisnan(value.number);
         case Type.Keyword:
         case Type.List:
         case Type.Map:
@@ -44,13 +45,14 @@ LispObject.Boolean toBoolean(LispObject* value){
 }
 
 LispObject.Character toCharacter(LispObject* value){
+    assert(value);
     final switch(value.type){
         case Type.Boolean:
-            return value.store.boolean ? 't' : 0;
+            return value.boolean ? 't' : 0;
         case Type.Character:
-            return value.store.character;
+            return value.character;
         case Type.Number:
-            return cast(LispObject.Character)(cast(uint) value.store.number);
+            return cast(LispObject.Character)(cast(uint) value.number);
         case Type.Null:
         case Type.Keyword:
         case Type.List:
@@ -64,13 +66,14 @@ LispObject.Character toCharacter(LispObject* value){
 }
     
 LispObject.Number toNumber(LispObject* value){
+    assert(value);
     final switch(value.type){
         case Type.Boolean:
-            return value.store.boolean ? 1 : 0;
+            return value.boolean ? 1 : 0;
         case Type.Character:
-            return cast(LispObject.Number) value.store.character;
+            return cast(LispObject.Number) value.character;
         case Type.Number:
-            return value.store.number;
+            return value.number;
         case Type.Null:
         case Type.Keyword:
         case Type.List:
@@ -85,9 +88,10 @@ LispObject.Number toNumber(LispObject* value){
 
 // Get whether two values are equal.
 bool equal(LispObject* a, LispObject* b){
+    assert(a && b);
     if(a == b){
         return a.type !is Type.Null && (
-            a.type !is Type.Number || !fisnan(a.store.number)
+            a.type !is Type.Number || !fisnan(a.number)
         );
     }else if(a.type !is b.type || a.typeObject != b.typeObject){
         return false;
@@ -96,43 +100,43 @@ bool equal(LispObject* a, LispObject* b){
         case Type.Null:
             return false;
         case Type.Boolean:
-            return a.store.boolean == b.store.boolean;
+            return a.boolean == b.boolean;
         case Type.Character:
-            return a.store.character == b.store.character;
+            return a.character == b.character;
         case Type.Number:
-            return (!fisnan(a.store.number) &&
-                fidentical(a.store.number, b.store.number)
+            return (!fisnan(a.number) &&
+                fidentical(a.number, b.number)
             );
         case Type.Keyword:
-            return a.store.keyword == b.store.keyword;
+            return a.keyword == b.keyword;
         case Type.List:
-            if(a.store.list.length != b.store.list.length){
+            if(a.listLength != b.listLength){
                 return false;
             }
-            for(size_t i = 0; i < a.store.list.length; i++){
-                if(!equal(a.store.list[i], b.store.list[i])){
+            for(size_t i = 0; i < a.listLength; i++){
+                if(!equal(a.list[i], b.list[i])){
                     return false;
                 }
             }
             return true;
         case Type.Map: goto case;
         case Type.Object:
-            return b.isMap() && mapsEqual!equal(a.store.map, b.store.map);
+            return b.isMap() && mapsEqual!equal(a.map, b.map);
         case Type.NativeFunction:
             return b.type is Type.NativeFunction && (
-                a.store.nativeFunction == b.store.nativeFunction
+                a.nativeFunction == b.nativeFunction
             );
         case Type.LispFunction:
             return b.type is Type.LispFunction && (
-                a.store.lispFunction.uniqueId == b.store.lispFunction.uniqueId
+                a.lispFunction.uniqueId == b.lispFunction.uniqueId
             );
         case Type.LispMethod:
             return b.type is Type.LispMethod && (
-                a.store.lispMethod.contextObject.identical(
-                    a.store.lispMethod.contextObject
+                a.lispMethod.contextObject.identical(
+                    a.lispMethod.contextObject
                 ) &&
-                b.store.lispMethod.functionObject.identical(
-                    b.store.lispMethod.functionObject
+                b.lispMethod.functionObject.identical(
+                    b.lispMethod.functionObject
                 )
             );
     }
@@ -140,6 +144,7 @@ bool equal(LispObject* a, LispObject* b){
     
 // Get whether two values are alike, i.e. sort-of-equal.
 bool like(LispObject* a, LispObject* b){
+    assert(a && b);
     if(a == b){
         return true;
     }
@@ -149,78 +154,78 @@ bool like(LispObject* a, LispObject* b){
                 case Type.Null:
                     return true;
                 case Type.Number:
-                    return fisnan(b.store.number);
+                    return fisnan(b.number);
                 default:
                     return false;
             }
         case Type.Boolean:
             switch(b.type){
                 case Type.Boolean:
-                    return a.store.boolean == b.store.boolean;
+                    return a.boolean == b.boolean;
                 case Type.Number:
-                    return numberLikeBoolean(b.store.number, a.store.boolean);
+                    return numberLikeBoolean(b.number, a.boolean);
                 case Type.Character:
-                    return characterLikeBoolean(b.store.character, a.store.boolean);
+                    return characterLikeBoolean(b.character, a.boolean);
                 default:
                     return false;
             }
         case Type.Character:
             switch(b.type){
                 case Type.Boolean:
-                    return characterLikeBoolean(a.store.character, b.store.boolean);
+                    return characterLikeBoolean(a.character, b.boolean);
                 case Type.Number:
-                    return characterLikeNumber(a.store.character, b.store.number);
+                    return characterLikeNumber(a.character, b.number);
                 case Type.Character:
-                    return a.store.character == b.store.character;
+                    return a.character == b.character;
                 default:
                     return false;
             }
         case Type.Number:
             switch(b.type){
                 case Type.Boolean:
-                    return numberLikeBoolean(a.store.number, b.store.boolean);
+                    return numberLikeBoolean(a.number, b.boolean);
                 case Type.Number:
                     return (
-                        fnearequal(a.store.number, b.store.number, LikeEpsilon) ||
-                        (fisnan(a.store.number) && fisnan(b.store.number))
+                        fnearequal(a.number, b.number, LikeEpsilon) ||
+                        (fisnan(a.number) && fisnan(b.number))
                     );
                 case Type.Character:
-                    return characterLikeNumber(b.store.character, a.store.number);
+                    return characterLikeNumber(b.character, a.number);
                 default:
                     return false;
             }
         case Type.Keyword:
             return b.type is Type.Keyword && (
-                a.store.keyword == b.store.keyword
+                a.keyword == b.keyword
             );
         case Type.List:
-            if(!b.isList() || a.store.list.length != b.store.list.length){
+            if(!b.isList() || a.listLength != b.listLength){
                 return false;
             }
-            for(size_t i = 0; i < a.store.list.length; i++){
-                if(!like(a.store.list[i], b.store.list[i])){
+            for(size_t i = 0; i < a.listLength; i++){
+                if(!like(a.list[i], b.list[i])){
                     return false;
                 }
             }
             return true;
         case Type.Map: goto case;
         case Type.Object:
-            return b.isMap() && mapsEqual!like(a.store.map, b.store.map);
+            return b.isMap() && mapsEqual!like(a.map, b.map);
         case Type.NativeFunction:
             return b.type is Type.NativeFunction && (
-                a.store.nativeFunction == b.store.nativeFunction
+                a.nativeFunction == b.nativeFunction
             );
         case Type.LispFunction:
             return b.type is Type.LispFunction && (
-                a.store.lispFunction.uniqueId == b.store.lispFunction.uniqueId
+                a.lispFunction.uniqueId == b.lispFunction.uniqueId
             );
         case Type.LispMethod:
             return b.type is Type.LispMethod && (
-                a.store.lispMethod.contextObject.identical(
-                    a.store.lispMethod.contextObject
+                a.lispMethod.contextObject.identical(
+                    a.lispMethod.contextObject
                 ) &&
-                b.store.lispMethod.functionObject.identical(
-                    b.store.lispMethod.functionObject
+                b.lispMethod.functionObject.identical(
+                    b.lispMethod.functionObject
                 )
             );
     }
@@ -237,6 +242,7 @@ int compareValues(A, B)(A a, B b){
     else return 0;
 }
 int compare(LispObject* a, LispObject* b){
+    assert(a && b);
     if(b.type is Type.Null){
         return Incomparable;
     }else if(a == b){
@@ -248,43 +254,43 @@ int compare(LispObject* a, LispObject* b){
         case Type.Boolean:
             switch(b.type){
                 case Type.Boolean:
-                    if(a.store.boolean) return b.store.boolean ? 0 : 1;
-                    else return b.store.boolean ? -1 : 0;
+                    if(a.boolean) return b.boolean ? 0 : 1;
+                    else return b.boolean ? -1 : 0;
                 case Type.Character:
-                    return compareValues(a.store.boolean ? 1 : 0, b.store.character);
+                    return compareValues(a.boolean ? 1 : 0, b.character);
                 case Type.Number:
-                    if(fisnan(b.store.number)){
+                    if(fisnan(b.number)){
                         return Incomparable;
                     }
-                    return compareValues(a.store.boolean ? 1 : 0, b.store.number);
+                    return compareValues(a.boolean ? 1 : 0, b.number);
                 default:
                     return Incomparable;
             }
         case Type.Character:
             switch(b.type){
                 case Type.Boolean:
-                    return compareValues(a.store.character, b.store.boolean ? 1 : 0);
+                    return compareValues(a.character, b.boolean ? 1 : 0);
                 case Type.Character:
-                    return compareValues(a.store.character, b.store.character);
+                    return compareValues(a.character, b.character);
                 case Type.Number:
-                    if(fisnan(b.store.number)){
+                    if(fisnan(b.number)){
                         return Incomparable;
                     }
-                    return compareValues(cast(uint) a.store.character, b.store.number);
+                    return compareValues(cast(uint) a.character, b.number);
                 default:
                     return Incomparable;
             }
         case Type.Number:
             switch(b.type){
                 case Type.Boolean:
-                    return compareValues(a.store.number, b.store.boolean ? 1 : 0);
+                    return compareValues(a.number, b.boolean ? 1 : 0);
                 case Type.Character:
-                    return compareValues(a.store.number, cast(uint) b.store.character);
+                    return compareValues(a.number, cast(uint) b.character);
                 case Type.Number:
-                    if(fisnan(a.store.number) || fisnan(b.store.number)){
+                    if(fisnan(a.number) || fisnan(b.number)){
                         return Incomparable;
                     }
-                    return compareValues(a.store.number, b.store.number);
+                    return compareValues(a.number, b.number);
                 default:
                     return Incomparable;
             }
@@ -294,11 +300,11 @@ int compare(LispObject* a, LispObject* b){
             if(!b.isList()){
                 return Incomparable;
             }
-            for(size_t i = 0; i < a.store.list.length && i < b.store.list.length; i++){
-                int order = compare(a.store.list[i], b.store.list[i]);
+            for(size_t i = 0; i < a.listLength && i < b.listLength; i++){
+                int order = compare(a.list[i], b.list[i]);
                 if(order) return order;
             }
-            return compareValues(a.store.list.length, b.store.list.length);
+            return compareValues(a.listLength, b.listLength);
         case Type.Map: goto case;
         case Type.Object: goto case;
         case Type.NativeFunction: goto case;

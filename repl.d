@@ -42,7 +42,6 @@ void lispRepl(LispContext* context){
             LispObject* expressionObject = null;
             try{
                 expressionObject = parse(context, expression);
-                //stdio.writeln("Parsed object: ", expressionObject.toString());
             }catch(LispParseException e){
                 stdio.writeln(e.msg);
             }
