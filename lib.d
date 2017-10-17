@@ -517,6 +517,20 @@ void registerListType(LispContext* context){
             }
         }
     );
+    context.registerFunction(context.ListType, "clone",
+        function LispObject*(LispContext* context, LispArguments args){
+            if(args.length == 0) return context.Null;
+            LispObject* list = context.evaluate(args[0]);
+            if(!list.isList()){
+                return context.Null;
+            }
+            LispObject*[] result = new LispObject*[list.listLength];
+            for(size_t i = 0; i < list.listLength; i++){
+                result[i] = list.list[i];
+            }
+            return context.list(result);
+        }
+    );
     context.registerFunction(context.ListType, "slice",
         function LispObject*(LispContext* context, LispArguments args){
             if(args.length == 0) return context.Null;

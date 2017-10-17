@@ -11,8 +11,6 @@ import alisp.escape : escapeCharacter;
 import alisp.list : LispList, listsEqual;
 import alisp.map : LispMap, mapsEqual;
 
-import mach.io.stdio;
-
 enum WriteFloatSettings LispFloatSettings = {
     PosNaNLiteral: "NaN",
     NegNaNLiteral: "-NaN",
