@@ -17,6 +17,7 @@
         (apply vector:(if ((let size (@:length)):gt 4) :n size):invoke @)
     )
     
+    :slice (function [:v :low :high] ((v:list):slice low high))
     :concat (function [:a :b] (apply vector (list:concat (a:list) (b:list))))
     
     :add (function [:a :b] (a:merge b sum))

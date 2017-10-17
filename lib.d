@@ -548,6 +548,12 @@ void registerListType(LispContext* context){
             if(args.length > 2){
                 high = context.evaluate(args[2]).toNumber();
             }
+            if(fisnan(low)){
+                low = 0;
+            }
+            if(fisnan(high)){
+                high = list.listLength;
+            }
             long lowInt = cast(long) low;
             long highInt = cast(long) high;
             LispObject*[] repeatNull(N)(N times){
