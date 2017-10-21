@@ -16,7 +16,9 @@ struct LispContext{
     LispContext* parent = null;
     LispContext* root = null;
     // Map identifier keys to values
-    LispMap inScope;
+    LispMap* inScope;
+    // Special map for builtin functions
+    LispMap* builtins;
     
     LispObject* BooleanType;
     LispObject* CharacterType;
@@ -27,6 +29,7 @@ struct LispContext{
     LispObject* ListType;
     LispObject* MapType;
     LispObject* ObjectType;
+    LispObject* ContextType;
     LispObject* NativeFunctionType;
     LispObject* LispFunctionType;
     LispObject* LispMethodType;
@@ -42,7 +45,7 @@ struct LispContext{
     LispObject* PosNaN;
     LispObject* NegNaN;
     
-    LispObject* Constructor;
+    LispObject* Invoke;
     
     size_t lispFunctionId = 0;
     
@@ -88,8 +91,9 @@ struct LispContext{
         }else{
             this.root = &this;
             this.initializeRootContext();
+            this.builtins = new LispMap(8);
         }
-        this.inScope = LispMap(8);
+        this.inScope = new LispMap(8);
     }
     
     LispContext* newChildContext(){
@@ -99,18 +103,20 @@ struct LispContext{
     void initializeRootContext(){
         // Initialize native types
         this.ObjectType = new LispObject(LispObject.Type.Object, null);
+        this.ObjectType.store.map = new LispMap();
         this.ObjectType.typeObject = this.ObjectType;
-        this.BooleanType = new LispObject(LispObject.Type.Object, this.ObjectType);
-        this.CharacterType = new LispObject(LispObject.Type.Object, this.ObjectType);
-        this.NumberType = new LispObject(LispObject.Type.Object, this.ObjectType);
-        this.IdentifierType = new LispObject(LispObject.Type.Object, this.ObjectType);
-        this.KeywordType = new LispObject(LispObject.Type.Object, this.ObjectType);
-        this.ExpressionType = new LispObject(LispObject.Type.Object, this.ObjectType);
-        this.ListType = new LispObject(LispObject.Type.Object, this.ObjectType);
-        this.MapType = new LispObject(LispObject.Type.Object, this.ObjectType);
-        this.NativeFunctionType = new LispObject(LispObject.Type.Object, this.ObjectType);
-        this.LispFunctionType = new LispObject(LispObject.Type.Object, this.ObjectType);
-        this.LispMethodType = new LispObject(LispObject.Type.Object, this.ObjectType);
+        this.BooleanType = this.object();
+        this.CharacterType = this.object();
+        this.NumberType = this.object();
+        this.IdentifierType = this.object();
+        this.KeywordType = this.object();
+        this.ExpressionType = this.object();
+        this.ListType = this.object();
+        this.MapType = this.object();
+        this.ContextType = this.object();
+        this.NativeFunctionType = this.object();
+        this.LispFunctionType = this.object();
+        this.LispMethodType = this.object();
         // Initialize literals
         this.Null = new LispObject(LispObject.Type.Null, null);
         this.Null.typeObject = this.Null;
@@ -124,7 +130,7 @@ struct LispContext{
         this.PosNaN = new LispObject(+LispObject.Number.nan, this.NumberType);
         this.NegNaN = new LispObject(-LispObject.Number.nan, this.NumberType);
         // Initialize common objects
-        this.Constructor = new LispObject("invoke"d, this.KeywordType);
+        this.Invoke = new LispObject("invoke"d, this.KeywordType);
     }
     
     void inheritFrom(LispContext* parent){
@@ -138,6 +144,7 @@ struct LispContext{
         this.ListType = parent.ListType;
         this.MapType = parent.MapType;
         this.ObjectType = parent.ObjectType;
+        this.ContextType = parent.ContextType;
         this.NativeFunctionType = parent.NativeFunctionType;
         this.LispFunctionType = parent.LispFunctionType;
         this.LispMethodType = parent.LispMethodType;
@@ -151,7 +158,7 @@ struct LispContext{
         this.NegInfinity = parent.NegInfinity;
         this.PosNaN = parent.PosNaN;
         this.NegNaN = parent.NegNaN;
-        this.Constructor = parent.Constructor;
+        this.Invoke = parent.Invoke;
     }
     
     void log(T...)(T values){
@@ -165,8 +172,11 @@ struct LispContext{
     void logError(T...)(T values){
         this.log("Error: ", values);
     }
-    void invalidIdentifier(LispObject* identifier){
+    void logIdentifierError(LispObject* identifier){
         this.logError("Invalid identifier ", this.encode(identifier));
+    }
+    void logExpressionError(LispObject* expression){
+        this.logError("Invalid expression ", this.encode(expression));
     }
     
     dstring encode(LispObject* object, size_t truncate = size_t.max){
@@ -270,13 +280,25 @@ struct LispContext{
         );
     }
     LispObject* map(){
-        return new LispObject(LispObject.Type.Map, this.MapType);
+        return new LispObject(new LispMap(), LispObject.Type.Map, this.MapType);
     }
-    LispObject* map(LispMap value){
-        return new LispObject(value, this.MapType);
+    LispObject* map(LispMap* value){
+        return new LispObject(value, LispObject.Type.Map, this.MapType);
     }
     LispObject* object(){
-        return new LispObject(LispObject.Type.Object, this.ObjectType);
+        return new LispObject(new LispMap(), LispObject.Type.Object, this.ObjectType);
+    }
+    LispObject* object(LispMap* map){
+        return new LispObject(map, LispObject.Type.Object, this.ObjectType);
+    }
+    LispObject* object(LispObject* typeObject){
+        return new LispObject(new LispMap(), LispObject.Type.Object, typeObject);
+    }
+    LispObject* context(){
+        return new LispObject(&this, this.ContextType);
+    }
+    LispObject* context(LispContext* context){
+        return new LispObject(context, this.ContextType);
     }
     LispObject* nativeFunction(in NativeFunction value){
         return new LispObject(value, this.NativeFunctionType);
@@ -286,6 +308,35 @@ struct LispContext{
     }
     LispObject* lispMethod(LispMethod value){
         return new LispObject(value, this.LispMethodType);
+    }
+    
+    LispObject* normalize(LispObject* object){
+        final switch(object.type){
+            case LispObject.Type.Null:
+                return this.Null;
+            case LispObject.Type.Boolean:
+                return object.boolean ? this.True : this.False;
+            case LispObject.Type.Character:
+                return this.character(object.character);
+            case LispObject.Type.Number:
+                return this.number(object.number);
+            case LispObject.Type.Keyword:
+                return this.keyword(object.keyword);
+            case LispObject.Type.List:
+                return this.list(object.list);
+            case LispObject.Type.Map:
+                return this.map(object.map);
+            case LispObject.Type.Object:
+                return this.object(object.map);
+            case LispObject.Type.Context:
+                return this.context(object.context);
+            case LispObject.Type.NativeFunction:
+                return this.nativeFunction(object.nativeFunction);
+            case LispObject.Type.LispFunction:
+                return this.lispFunction(object.lispFunction);
+            case LispObject.Type.LispMethod:
+                return this.lispMethod(object.lispMethod);
+        }
     }
     
     size_t nextLispFunctionId(){
@@ -311,17 +362,8 @@ struct LispContext{
         return value;
     }
     LispObject* register(in dstring key, LispObject* value){
-        LispObject* keyword = this.keyword(key);
-        LispObject* object = this.register(keyword, value);
-        object.builtinIdentifier = this.identifier([keyword]);
-        return object;
+        return this.register(this.keyword(key), value);
     }
-    LispObject* registerFunction(in dstring key, in NativeFunction value){
-        LispObject* functionObject = this.nativeFunction(value);
-        this.register(key, functionObject);
-        return functionObject;
-    }
-    
     LispObject* register(
         LispObject* withObject, LispObject* key, LispObject* value
     ){
@@ -329,23 +371,58 @@ struct LispContext{
         withObject.insert(key, value);
         return value;
     }
-    LispObject* registerFunction(
-        LispObject* withObject, LispObject* key, in NativeFunction value
+    LispObject* register(
+        LispObject* withObject, in dstring key, LispObject* value
     ){
-        LispObject* functionObject = this.nativeFunction(value);
-        this.register(withObject, key, functionObject);
-        return functionObject;
+        return this.register(withObject, this.keyword(key), value);
     }
-    LispObject* register(LispObject* withObject, in dstring key, LispObject* value){
+    
+    LispObject* registerBuiltin(LispObject* key, LispObject* value){
+        assert(key && value);
+        this.root.builtins.insert(key, value);
+        return this.register(key, value);
+    }
+    LispObject* registerBuiltin(in dstring key, LispObject* value){
         LispObject* keyword = this.keyword(key);
-        LispObject* object = this.register(withObject, keyword, value);
+        LispObject* object = this.registerBuiltin(keyword, value);
         object.builtinIdentifier = this.identifier([keyword]);
         return object;
     }
-    LispObject* registerFunction(
+    LispObject* registerBuiltin(in dstring key, in NativeFunction value){
+        LispObject* functionObject = this.nativeFunction(value);
+        this.registerBuiltin(key, functionObject);
+        return functionObject;
+    }
+    
+    LispObject* registerBuiltin(
+        LispObject* withObject, LispObject* key, LispObject* value
+    ){
+        assert(withObject && key && value);
+        LispObject*[] identity = this.identifyObject(withObject);
+        if(identity && identity.length){
+            identity ~= key;
+            LispObject* identifier = this.identifier(identity);
+            this.root.builtins.insert(identifier, value);
+            value.builtinIdentifier = identifier;
+        }
+        return this.register(withObject, key, value);
+    }
+    LispObject* registerBuiltin(
+        LispObject* withObject, LispObject* key, in NativeFunction value
+    ){
+        LispObject* functionObject = this.nativeFunction(value);
+        this.registerBuiltin(withObject, key, functionObject);
+        return functionObject;
+    }
+    LispObject* registerBuiltin(LispObject* withObject, in dstring key, LispObject* value){
+        LispObject* keyword = this.keyword(key);
+        LispObject* object = this.registerBuiltin(withObject, keyword, value);
+        return object;
+    }
+    LispObject* registerBuiltin(
         LispObject* withObject, in dstring key, in NativeFunction value
     ){
-        return this.registerFunction(withObject, this.keyword(key), value);
+        return this.registerBuiltin(withObject, this.keyword(key), value);
     }
     
     struct Identity{
@@ -429,26 +506,45 @@ struct LispContext{
     // Evaluate an object.
     LispObject* evaluate(LispObject* object){
         assert(object);
-        if(object.instanceOf(this.IdentifierType)){
-            return this.evaluateIdentifier(object);
-        }else if(!object.instanceOf(this.ExpressionType)){
-            return object;
-        }else{
-            return this.evaluateExpression(object);
+        LispObject* typeObject = object.typeObject;
+        while(true){
+            if(typeObject is this.IdentifierType){
+                return this.evaluateIdentifier(object);
+            }else if(typeObject is this.ExpressionType){
+                return this.evaluateExpression(object);
+            }else if(typeObject.typeObject is typeObject){
+                break;
+            }
+            typeObject = typeObject.typeObject;
         }
+        return object;
     }
     LispObject* evaluateIdentifier(LispObject* identifier){
-        assert(identifier && identifier.isList());
-        Identity identity = this.identify(identifier);
-        if(identity.value){
-            return identity.value;
+        assert(identifier);
+        if(identifier.isList){
+            if(identifier.listLength == 0){
+                return this.Null;
+            }
+            Identity identity = this.identify(identifier);
+            if(identity.value){
+                return identity.value;
+            }
+        }else{
+            Identity identity = this.identifyInScope(identifier);
+            if(identity.value){
+                return identity.value;
+            }
         }
-        this.logWarning("Invalid identifier.");
+        this.logIdentifierError(identifier);
         return this.Null;
     }
     LispObject* evaluateExpression(LispObject* expression){
-        assert(expression && expression.isList());
-        if(expression.listLength == 0){
+        assert(expression);
+        if(!expression.isList){
+            this.logExpressionError(expression);
+            return this.Null;
+        }
+        if(!expression.listLength){
             return this.Null;
         }
         LispObject* firstObject = this.evaluate(expression.list[0]);
@@ -458,16 +554,17 @@ struct LispContext{
         }else if(firstObject.type is LispObject.Type.Null){
             return firstObject;
         }else{
-            this.logWarning("Malformed expression.");
+            this.logExpressionError(expression);
             return this.Null;
         }
     }
     
     // Invoke a callable object.
     LispObject* invoke(LispObject* functionObject, LispArguments arguments){
+        // TODO: Rewrite to avoid crash for cyclic references
         assert(functionObject && functionObject.isCallable());
         if(functionObject.isMap()){
-            LispObject* invoke = functionObject.getAttribute(this.Constructor).object;
+            LispObject* invoke = functionObject.getAttribute(this.Invoke).object;
             if(invoke && invoke.isCallable()){
                 return this.invoke(invoke, arguments);
             }else{

@@ -9,10 +9,10 @@ import alisp.lib : registerBuiltins;
 
 LispContext* getContext(){
     LispContext* context = new LispContext(null);
-    registerBuiltins(context);
     context.logFunction = function void(string message){
         stdio.writeln(message);
     };
+    registerBuiltins(context);
     return context;
 }
 
@@ -40,8 +40,10 @@ int main(string[] args){
             return 1;
         }
         // Evaluate the file contents
-        LispObject* result = context.evaluate(sourceObject);
-        stdio.writeln(context.stringify(result));
+        if(sourceObject){
+            LispObject* result = context.evaluate(sourceObject);
+            stdio.writeln(context.stringify(result));
+        }
         return 0;
     }
 }

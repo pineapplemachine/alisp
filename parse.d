@@ -1,6 +1,6 @@
 module alisp.parse;
 
-import mach.range : map, all, asarray;
+import mach.range : map, any, all, asarray;
 import mach.text.ascii : isdigit, iswhitespace;
 import mach.text.numeric : writefloat, parsefloat, parsehex;
 import mach.text.text : text;
@@ -12,7 +12,7 @@ import alisp.list : LispList;
 import alisp.map : LispMap;
 import alisp.obj : LispObject, LispFloatSettings;
 
-import mach.io : stdio;
+
 
 class LispParseException: Exception{
     string lispFile = "";
@@ -236,10 +236,18 @@ LispObject* parse(LispContext* context, in string source, in string filePath = "
             terminateSymbol(i);
             if(!identifierStack[$ - 1] && currentNode.listLength){
                 LispObject* lastSymbol = currentNode.store.list[$ - 1];
-                LispObject* newNode = context.identifier([lastSymbol]);
-                currentNode.list[$ - 1] = newNode;
-                currentNode = newNode;
-                nodeStack ~= newNode;
+                if(lastSymbol.typeObject == context.IdentifierType &&
+                    lastSymbol.isList && lastSymbol.list.length == 1 &&
+                    lastSymbol.list[0].type is LispObject.Type.Keyword
+                ){
+                    currentNode = lastSymbol;
+                    nodeStack ~= lastSymbol;
+                }else{
+                    LispObject* newNode = context.identifier([lastSymbol]);
+                    currentNode.list[$ - 1] = newNode;
+                    currentNode = newNode;
+                    nodeStack ~= newNode;
+                }
                 lineNumberStack ~= lineNumber;
                 identifierStack ~= true;
                 parenStack ~= '\0';
@@ -295,14 +303,26 @@ LispObject* parse(LispContext* context, in string source, in string filePath = "
             currentNode = nodeStack[$ - 1];
         }
     }
-    terminateSymbol(source.length);
-    terminateIdentifier();
+    if(singleQuote){
+        throw new LispParseException(filePath, lineNumber,
+            "Unterminated character literal."
+        );
+    }else if(doubleQuote){
+        throw new LispParseException(filePath, lineNumber,
+            "Unterminated string literal."
+        );
+    }else if(!lineComment && !blockComment){
+        terminateSymbol(source.length);
+        terminateIdentifier();
+    }
     if(nodeStack.length > 1){
         throw new LispParseException(
             filePath, lineNumberStack[$ - 1], "Unterminated expression"
         );
     }
-    if(currentNode.listLength == 1){
+    if(currentNode.listLength == 0){
+        return null;
+    }else if(currentNode.listLength == 1){
         return currentNode.list[0];
     }else{
         currentNode.list.insert(0, context.identifier("do"d));
@@ -312,26 +332,29 @@ LispObject* parse(LispContext* context, in string source, in string filePath = "
 
 dstring encodeList(
     LispContext* context, LispList list, bool identifier,
-    size_t depth = 0, size_t truncate = size_t.max
+    size_t truncate = size_t.max, size_t depth = 0,
+    LispObject*[] visited = null
 ){
     return encodeList(context, list.objects, identifier, depth, truncate);
 }
 dstring encodeList(
     LispContext* context, LispObject*[] list, bool identifier,
-    size_t depth = 0, size_t truncate = size_t.max
+    size_t truncate = size_t.max, size_t depth = 0,
+    LispObject*[] visited = null
 ){
     assert(context);
     dstring result = "";
     foreach(child; list){
         assert(child);
         if(result.length) result ~= identifier ? ':' : ' ';
-        result ~= encode(context, child, identifier, truncate, depth);
+        result ~= encode(context, child, identifier, truncate, depth, visited);
     }
     return result;
 }
 dstring encodeMap(
-    LispContext* context, LispMap map,
-    size_t depth = 0, size_t truncate = size_t.max
+    LispContext* context, LispMap* map,
+    size_t truncate = size_t.max, size_t depth = 0,
+    LispObject*[] visited = null
 ){
     assert(context);
     dstring result = "";
@@ -339,18 +362,39 @@ dstring encodeMap(
         assert(pair.key && pair.value);
         if(result.length) result ~= ' ';
         result ~= (
-            encode(context, pair.key, false, truncate, depth) ~ ' ' ~
-            encode(context, pair.value, false, truncate, depth)
+            encode(context, pair.key, false, truncate, depth, visited) ~ ' ' ~
+            encode(context, pair.value, false, truncate, depth, visited)
         );
     }
     return result;
 }
 dstring encode(
     LispContext* context, LispObject* object, bool inIdentifier,
-    size_t truncate = size_t.max, size_t depth = 0
+    size_t truncate = size_t.max, size_t depth = 0,
+    LispObject*[] visitedStack = null
 ){
     assert(context && object);
     const nDepth = depth + 1;
+    // These helper functions help with detecting cyclic references
+    LispObject*[] nextVisited(){
+        return visitedStack ~ object;
+    }
+    bool checkVisited(){
+        foreach(visited; visitedStack){
+            if(visited.cyclicIdentical(object)){
+                return true;
+            }
+        }
+        return false;
+    }
+    dstring encodeVisited(){
+        LispObject*[] identity = context.identifyObject(object);
+        if(identity && identity.length){
+            return encodeList(context, identity, true, truncate, nDepth, nextVisited);
+        }else{
+            return encode(context, object, inIdentifier, 0, 0, []);
+        }
+    }
     if(
         object.type is LispObject.Type.Null &&
         object.typeObject == context.Null
@@ -386,7 +430,10 @@ dstring encode(
         object.type is LispObject.Type.List &&
         object.typeObject == context.IdentifierType
     ){
-        return encodeList(context, object.list, true);
+        if(checkVisited()) return encodeVisited();
+        return encodeList(
+            context, object.list, true, truncate, nDepth, nextVisited
+        );
     }else if(
         object.type is LispObject.Type.List &&
         object.typeObject == context.ExpressionType
@@ -394,7 +441,10 @@ dstring encode(
         if(depth >= truncate){
             return "(...)"d;
         }
-        return '(' ~ encodeList(context, object.list, false) ~ ')';
+        if(checkVisited()) return encodeVisited();
+        return '(' ~ encodeList(
+            context, object.list, false, truncate, nDepth, nextVisited
+        ) ~ ')';
     }else if(
         object.type is LispObject.Type.List &&
         object.typeObject == context.ListType
@@ -409,9 +459,10 @@ dstring encode(
         if(depth >= truncate){
             return "[...]"d;
         }
+        if(checkVisited()) return encodeVisited();
         return '[' ~ encodeList(
-            context, object.list, false, truncate, nDepth) ~
-        ']';
+            context, object.list, false, truncate, nDepth, nextVisited
+        ) ~ ']';
     }else if(
         object.type is LispObject.Type.Map &&
         object.typeObject == context.MapType
@@ -419,21 +470,27 @@ dstring encode(
         if(depth >= truncate){
             return "{...}"d;
         }
-        return '{' ~ encodeMap(context, object.map) ~ '}';
+        if(checkVisited()) return encodeVisited();
+        return '{' ~ encodeMap(
+            context, object.map, truncate, nDepth, nextVisited
+        ) ~ '}';
     }else if(
         object.type is LispObject.Type.NativeFunction &&
         object.typeObject == context.NativeFunctionType
     ){
-        return (object.builtinIdentifier ?
-            encodeList(
+        if(object.builtinIdentifier && object.builtinIdentifier.isList){
+            return "(builtin "d ~ encodeList(
                 context, object.builtinIdentifier.list,
-                true, truncate, nDepth
-            ) : "(%anonymous builtin%)"d
-        );
+                true, truncate, nDepth, nextVisited
+            ) ~ ')';
+        }else{
+            return "(builtin)"d;
+        }
     }else if(
         object.type is LispObject.Type.LispFunction &&
         object.typeObject == context.LispFunctionType
     ){
+        if(checkVisited()) return encodeVisited();
         LispObject*[] argumentList = (
             object.lispFunction.argumentList
         );
@@ -441,8 +498,8 @@ dstring encode(
             object.lispFunction.expressionBody
         );
         return "(function ["d ~
-            encodeList(context, argumentList, false, truncate, nDepth) ~ "] "d ~
-            encode(context, expressionBody, false, truncate, nDepth) ~
+            encodeList(context, argumentList, false, truncate, nDepth, nextVisited) ~ "] "d ~
+            encode(context, expressionBody, false, truncate, nDepth, nextVisited) ~
         ')';
     }else if(
         object.type is LispObject.Type.LispMethod &&
@@ -458,7 +515,7 @@ dstring encode(
             );
             if(identity){
                 contextObject = encodeList(
-                    context, identity, true, truncate, nDepth
+                    context, identity, true, truncate, nDepth, nextVisited
                 );
                 namedContextObject = true;
             }
@@ -466,12 +523,13 @@ dstring encode(
         if(!namedContextObject){
             contextObject = encode(
                 context, object.lispMethod.contextObject,
-                false, truncate, nDepth
+                false, truncate, nDepth, nextVisited
             );
         }
+        if(checkVisited()) return encodeVisited();
         return "(method "d ~ contextObject ~ ' ' ~ encode(
             context, object.lispMethod.functionObject,
-            false, truncate, nDepth
+            false, truncate, nDepth, nextVisited
         ) ~ ')';
     }else if(
         object.type is LispObject.Type.Object &&
@@ -482,9 +540,14 @@ dstring encode(
         }else if(depth >= truncate){
             return "{object ...}"d;
         }
+        if(checkVisited()) return encodeVisited();
         return "{object "d ~ encodeMap(
-            context, object.map, truncate, nDepth) ~
-        '}';
+            context, object.map, truncate, nDepth, nextVisited
+        ) ~ '}';
+    }else if(
+        object.type is LispObject.Type.Context
+    ){
+        return "(context)"d;
     }else{
         dstring typeName = void;
         if(object.typeObject == object){
@@ -492,7 +555,7 @@ dstring encode(
         }else{
             LispObject*[] typeIdentity = context.identifyObject(object.typeObject);
             typeName = (typeIdentity ?
-                encodeList(context, typeIdentity, true, truncate, nDepth) :
+                encodeList(context, typeIdentity, true, truncate, nDepth, nextVisited) :
                 "(%anonymous object%)"d
             );
         }
@@ -502,13 +565,16 @@ dstring encode(
             }else if(depth >= truncate){
                 return '{' ~ typeName ~ " ...}"d;
             }
+            if(checkVisited()) return encodeVisited();
             return '{' ~ typeName ~ ' ' ~ encodeMap(
-                context, object.map, truncate, nDepth
+                context, object.map, truncate, nDepth, nextVisited
             ) ~ '}';
         }else{
-            // TODO: Is this case even possible?
+            // TODO: Maybe get rid of this case?
+            LispObject* normalizedObject = context.normalize(object);
+            if(checkVisited()) return encodeVisited();
             return "(as "d ~ typeName ~ ' ' ~ encode(
-                context, object, false, truncate, nDepth
+                context, normalizedObject, false, truncate, nDepth, nextVisited
             ) ~ ')';
         }
     }

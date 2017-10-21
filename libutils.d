@@ -37,6 +37,7 @@ LispObject.Boolean toBoolean(LispObject* value){
         case Type.List:
         case Type.Map:
         case Type.Object:
+        case Type.Context:
         case Type.NativeFunction:
         case Type.LispFunction:
         case Type.LispMethod:
@@ -58,6 +59,7 @@ LispObject.Character toCharacter(LispObject* value){
         case Type.List:
         case Type.Map:
         case Type.Object:
+        case Type.Context:
         case Type.NativeFunction:
         case Type.LispFunction:
         case Type.LispMethod:
@@ -79,6 +81,7 @@ LispObject.Number toNumber(LispObject* value){
         case Type.List:
         case Type.Map:
         case Type.Object:
+        case Type.Context:
         case Type.NativeFunction:
         case Type.LispFunction:
         case Type.LispMethod:
@@ -122,6 +125,8 @@ bool equal(LispObject* a, LispObject* b){
         case Type.Map: goto case;
         case Type.Object:
             return b.isMap() && mapsEqual!equal(a.map, b.map);
+        case Type.Context:
+            return false;
         case Type.NativeFunction:
             return b.type is Type.NativeFunction && (
                 a.nativeFunction == b.nativeFunction
@@ -211,6 +216,8 @@ bool like(LispObject* a, LispObject* b){
         case Type.Map: goto case;
         case Type.Object:
             return b.isMap() && mapsEqual!like(a.map, b.map);
+        case Type.Context:
+            return false;
         case Type.NativeFunction:
             return b.type is Type.NativeFunction && (
                 a.nativeFunction == b.nativeFunction
@@ -307,6 +314,7 @@ int compare(LispObject* a, LispObject* b){
             return compareValues(a.listLength, b.listLength);
         case Type.Map: goto case;
         case Type.Object: goto case;
+        case Type.Context: goto case;
         case Type.NativeFunction: goto case;
         case Type.LispFunction: goto case;
         case Type.LispMethod:

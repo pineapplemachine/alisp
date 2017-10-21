@@ -8,7 +8,7 @@ import mach.io.stdio;
 
 bool mapsEqual(
     alias compareValues = (a, b) => a.sameKey(b)
-)(LispMap a, LispMap b){
+)(LispMap* a, LispMap* b){
     if(a.length != b.length){
         return false;
     }
@@ -148,20 +148,16 @@ struct LispMap{
         this.longestBucket = &this.buckets[0];
     }
     
-    bool opEquals(LispMap map){
-        return mapsEqual(this, map);
-    }
-    
     LispMapRange asrange(){
-        return LispMapRange(this);
+        return LispMapRange(&this);
     }
 }
 
 struct LispMapRange{
-    LispMap lispMap;
+    LispMap* lispMap;
     size_t i = 0, j = 0;
     
-    this(LispMap lispMap){
+    this(LispMap* lispMap){
         this.lispMap = lispMap;
         if(lispMap.buckets.length > 1000) assert(false);
         if(lispMap.buckets.length && lispMap.buckets[0].length > 1000) assert(false);

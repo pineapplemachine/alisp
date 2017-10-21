@@ -81,7 +81,7 @@ LispObjectHash listHash(LispList list){
     return value;
 }
 
-LispObjectHash mapHash(LispMap map){
+LispObjectHash mapHash(LispMap* map){
     LispObjectHash value = 0;
     foreach(pair; map.asrange()){
         assert(pair.key && pair.value);
@@ -107,6 +107,7 @@ struct LispObject{
         List,
         Map,
         Object,
+        Context,
         NativeFunction,
         LispFunction,
         LispMethod,
@@ -119,7 +120,8 @@ struct LispObject{
         Number number;
         Keyword keyword;
         LispList list;
-        LispMap map;
+        LispMap* map;
+        LispContext* context;
         NativeFunction nativeFunction;
         LispFunction lispFunction;
         LispMethod lispMethod;
@@ -177,11 +179,23 @@ struct LispObject{
         this.typeObject = typeObject;
         this.store.list = list;
     }
-    this(LispMap map, LispObject* typeObject){
+    this(LispMap* map, LispObject* typeObject){
         assert(typeObject);
         this.type = Type.Map;
         this.typeObject = typeObject;
         this.store.map = map;
+    }
+    this(LispMap* map, Type type, LispObject* typeObject){
+        assert(typeObject);
+        this.type = type;
+        this.typeObject = typeObject;
+        this.store.map = map;
+    }
+    this(LispContext* context, LispObject* typeObject){
+        assert(typeObject);
+        this.type = Type.Context;
+        this.typeObject = typeObject;
+        this.store.context = context;
     }
     this(in NativeFunction nativeFunction, LispObject* typeObject){
         assert(typeObject);
@@ -236,6 +250,9 @@ struct LispObject{
         }
         LispObject* object = &this;
         LispObject* result = null;
+        // Should not actually be possible to construct a cyclic type chain
+        // where the cycle appears anywhere but at the root.
+        //LispObject*[] visitedStack;
         while(true){
             if(object.type is Type.Object){
                 result = object.store.map.get(attribute);
@@ -244,21 +261,31 @@ struct LispObject{
                 break;
             }
             object = object.typeObject;
+            //foreach(visited; visitedStack){
+            //    if(object.identical(visited) || object.cyclicIdentical(visited)){
+            //        return Result(false, null);
+            //    }
+            //}
+            //visitedStack ~= object;
         }
         return Result(object == &this, result);
     }
     
-    LispObject*[] identifyObject(LispObject* object){
+    LispObject*[] identifyObject(LispObject* object, LispObject*[] visitedStack = null){
         assert(object);
         if(this.type !is Type.Object){
             return null;
+        }
+        foreach(visited; visitedStack){
+            if(this.map is visited.map) return null;
         }
         foreach(pair; this.map.asrange()){
             assert(pair.key && pair.value);
             if(pair.value.identical(object)) return [pair.key];
         }
+        LispObject*[] nextVisited = visitedStack ~ &this;
         foreach(pair; this.map.asrange()){
-            if(LispObject*[] path = pair.value.identifyObject(object)){
+            if(LispObject*[] path = pair.value.identifyObject(object, nextVisited)){
                 return pair.key ~ path;
             }
         }
@@ -294,11 +321,14 @@ struct LispObject{
                     ) ~ dchar(']');
                 }
             case Type.Map:
+                assert(this.store.map);
                 return dchar('{') ~ cast(dstring)(
                     this.store.map.asrange().map!(pair =>
                         pair.key.toString() ~ ' ' ~ pair.value.toString()
                     ).join(" ").asarray()
                 ) ~ dchar('}');
+            case Type.Context:
+                return "(context)"d;
             case Type.Object:
                 if(this.store.map.length == 0){
                     return "(object)"d;
@@ -329,6 +359,14 @@ struct LispObject{
         }
     }
     
+    bool cyclicIdentical(LispObject* value){
+        return (
+            this.isList && value.isList && this.list.objects is value.list.objects
+        ) || (
+            this.isMap && value.isMap && this.map is value.map
+        );
+    }
+    
     // Strict equality comparison. Returns true when the inputs are exactly
     // the same.
     bool identical(LispObject* value){
@@ -350,11 +388,12 @@ struct LispObject{
             case Type.Keyword:
                 return this.keyword == value.keyword;
             case Type.List:
-                return false;
-            case Type.Map:
-                return false;
+                return this.list.objects is value.list.objects;
+            case Type.Map: goto case;
             case Type.Object:
-                return false;
+                return this.map is value.map;
+            case Type.Context:
+                return this.context == value.context;
             case Type.NativeFunction:
                 return this.nativeFunction == value.nativeFunction;
             case Type.LispFunction:
@@ -399,12 +438,15 @@ struct LispObject{
                 );
             case Type.Map: goto case;
             case Type.Object:
+                assert(this.map && value.map);
                 return mapsEqual!((a, b) => {
                     assert(a && b);
                     return a.sameKey(b);
                 })(
                     this.map, value.map
                 );
+            case Type.Context:
+                return this.context == value.context;
             case Type.NativeFunction:
                 return this.nativeFunction == value.nativeFunction;
             case Type.LispFunction:
@@ -444,7 +486,12 @@ struct LispObject{
                 break;
             case Type.Map: goto case;
             case Type.Object:
+                assert(this.store.map);
                 valueHash = mapHash(this.store.map);
+                break;
+            case Type.Context:
+                assert(this.store.context);
+                valueHash = cast(LispObjectHash) this.store.context;
                 break;
             case Type.NativeFunction:
                 // TODO: Verify behavior
@@ -474,19 +521,19 @@ struct LispObject{
         this.list.extend(list);
     }
     
-    @property Boolean boolean(){
+    @property ref Boolean boolean(){
         assert(this.type is Type.Boolean);
         return this.store.boolean;
     }
-    @property Character character(){
+    @property ref Character character(){
         assert(this.type is Type.Character);
         return this.store.character;
     }
-    @property Number number(){
+    @property ref Number number(){
         assert(this.type is Type.Number);
         return this.store.number;
     }
-    @property Keyword keyword(){
+    @property ref Keyword keyword(){
         assert(this.type is Type.Keyword);
         return this.store.keyword;
     }
@@ -494,11 +541,15 @@ struct LispObject{
         assert(this.isList());
         return this.store.list;
     }
-    @property ref LispMap map(){
+    @property ref LispMap* map(){
         assert(this.isMap());
         return this.store.map;
     }
-    @property NativeFunction nativeFunction(){
+    @property ref LispContext* context(){
+        assert(this.type is Type.Context);
+        return this.store.context;
+    }
+    @property ref NativeFunction nativeFunction(){
         assert(this.type is Type.NativeFunction);
         return this.store.nativeFunction;
     }
