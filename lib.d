@@ -367,7 +367,19 @@ void registerNumberType(LispContext* context){
             if(args.length == 0) return context.Null;
             LispObject* numberObject = context.evaluate(args[0]);
             for(size_t i = 1; i < args.length; i++){
-                if(compare(context.evaluate(args[i]), numberObject) >= 0){
+                if(compare(numberObject, context.evaluate(args[i])) >= 0){
+                    return context.False;
+                }
+            }
+            return context.True;
+        }
+    );
+    context.registerBuiltin(context.NumberType, "gte",
+        function LispObject*(LispContext* context, LispArguments args){
+            if(args.length == 0) return context.Null;
+            LispObject* numberObject = context.evaluate(args[0]);
+            for(size_t i = 1; i < args.length; i++){
+                if(compare(context.evaluate(args[i]), numberObject) > 0){
                     return context.False;
                 }
             }
@@ -386,13 +398,25 @@ void registerNumberType(LispContext* context){
             return context.True;
         }
     );
+    context.registerBuiltin(context.NumberType, "lte",
+        function LispObject*(LispContext* context, LispArguments args){
+            if(args.length == 0) return context.Null;
+            LispObject* numberObject = context.evaluate(args[0]);
+            for(size_t i = 1; i < args.length; i++){
+                if(compare(numberObject, context.evaluate(args[i])) > 0){
+                    return context.False;
+                }
+            }
+            return context.True;
+        }
+    );
 };
 
 void registerKeywordType(LispContext* context){
     context.register("keyword", context.KeywordType);
     context.registerBuiltin(context.KeywordType, context.Invoke,
         function LispObject*(LispContext* context, LispArguments args){
-            if(args.length == 0) return context.Null;
+            if(args.length == 0) return context.keyword("");
             LispObject* value = context.evaluate(args[0]);
             if(value.type is LispObject.Type.Keyword){
                 return value;
@@ -1222,7 +1246,7 @@ void registerAssignment(LispContext* context){
             }
             LispObject* value = context.evaluate(args[1]);
             LispContext.Identity identity = context.identify(args[0]);
-            if(!identity.value){
+            if(!identity.attribute){
                 context.logIdentifierError(args[0]);
                 return context.Null;
             }else if(identity.contextObject){
@@ -1416,11 +1440,13 @@ void registerLogic(LispContext* context){
     );
     context.registerBuiltin("any",
         function LispObject*(LispContext* context, LispArguments args){
+            LispObject* falsey = context.Null;
             foreach(arg; args){
                 LispObject* value = context.evaluate(arg);
                 if(value.toBoolean()) return value;
+                falsey = value;
             }
-            return context.Null;
+            return falsey;
         }
     );
     context.registerBuiltin("all",

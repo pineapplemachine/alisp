@@ -49,7 +49,7 @@ LispObject.Character toCharacter(LispObject* value){
     assert(value);
     final switch(value.type){
         case Type.Boolean:
-            return value.boolean ? 't' : 0;
+            return value.boolean ? 1 : 0;
         case Type.Character:
             return value.character;
         case Type.Number:

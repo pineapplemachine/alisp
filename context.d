@@ -49,7 +49,9 @@ struct LispContext{
     
     size_t lispFunctionId = 0;
     
-    void function(string message) logFunction;
+    void delegate(in string message) logFunction;
+    void delegate(LispObject* identifier) onIdentifierError;
+    void delegate(LispObject* expression) onExpressionError;
     
     @property LispObject* NaN(){
         return this.PosNaN;
@@ -173,10 +175,18 @@ struct LispContext{
         this.log("Error: ", values);
     }
     void logIdentifierError(LispObject* identifier){
-        this.logError("Invalid identifier ", this.encode(identifier));
+        if(this.root.onIdentifierError){
+            this.root.onIdentifierError(identifier);
+        }else{
+            this.logError("Invalid identifier ", this.encode(identifier));
+        }
     }
     void logExpressionError(LispObject* expression){
-        this.logError("Invalid expression ", this.encode(expression));
+        if(this.root.onExpressionError){
+            this.root.onExpressionError(identifier);
+        }else{
+            this.logError("Invalid expression ", this.encode(expression));
+        }
     }
     
     dstring encode(LispObject* object, size_t truncate = size_t.max){
