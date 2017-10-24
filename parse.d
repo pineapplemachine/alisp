@@ -335,7 +335,7 @@ dstring encodeList(
     size_t truncate = size_t.max, size_t depth = 0,
     LispObject*[] visited = null
 ){
-    return encodeList(context, list.objects, identifier, depth, truncate);
+    return encodeList(context, list.objects, identifier, truncate, depth, visited);
 }
 dstring encodeList(
     LispContext* context, LispObject*[] list, bool identifier,
@@ -573,7 +573,7 @@ dstring encode(
             // TODO: Maybe get rid of this case?
             LispObject* normalizedObject = context.normalize(object);
             if(checkVisited()) return encodeVisited();
-            return "(as "d ~ typeName ~ ' ' ~ encode(
+            return "(new "d ~ typeName ~ ' ' ~ encode(
                 context, normalizedObject, false, truncate, nDepth, nextVisited
             ) ~ ')';
         }
