@@ -32,13 +32,6 @@ DEALINGS IN THE SOFTWARE.
 
 module alisp.terminal;
 
-/*
-    Widgets:
-        tab widget
-        scrollback buffer
-        partitioned canvas
-*/
-
 // FIXME: ctrl+d eof on stdin
 
 // FIXME: http://msdn.microsoft.com/en-us/library/windows/desktop/ms686016%28v=vs.85%29.aspx
@@ -689,8 +682,8 @@ struct Terminal {
 
             SetConsoleActiveScreenBuffer(hConsole);
             /*
-http://msdn.microsoft.com/en-us/library/windows/desktop/ms686125%28v=vs.85%29.aspx
-http://msdn.microsoft.com/en-us/library/windows/desktop/ms683193%28v=vs.85%29.aspx
+    http://msdn.microsoft.com/en-us/library/windows/desktop/ms686125%28v=vs.85%29.aspx
+    http://msdn.microsoft.com/en-us/library/windows/desktop/ms683193%28v=vs.85%29.aspx
             */
             COORD size;
             /*
@@ -1292,30 +1285,6 @@ http://msdn.microsoft.com/en-us/library/windows/desktop/ms683193%28v=vs.85%29.as
     }
 
 }
-
-/+
-struct ConsoleBuffer {
-    int cursorX;
-    int cursorY;
-    int width;
-    int height;
-    dchar[] data;
-
-    void actualize(Terminal* t) {
-        auto writer = t.getBufferedWriter();
-
-        this.copyTo(&(t.onScreen));
-    }
-
-    void copyTo(ConsoleBuffer* buffer) {
-        buffer.cursorX = this.cursorX;
-        buffer.cursorY = this.cursorY;
-        buffer.width = this.width;
-        buffer.height = this.height;
-        buffer.data[] = this.data[];
-    }
-}
-+/
 
 /**
  * Encapsulates the stream of input events received from the terminal input.
@@ -3060,7 +3029,46 @@ class LineGetter {
         auto towrite = line[horizontalScrollPosition .. $];
         auto cursorPositionToDrawX = cursorPosition - horizontalScrollPosition;
         auto cursorPositionToDrawY = 0;
-
+        
+        size_t openAt = 0;
+        size_t closeAt = 0;
+        size_t openBalance = 0;
+        for(long i = cursorPosition; i > 0; i--){
+            if(i >= line.length) continue;
+            if(line[i] == '(' || line[i] == '[' || line[i] == '{'){
+                if(openBalance == 0){
+                    openAt = cast(size_t) i;
+                    break;
+                }
+                openBalance--;
+            }else if(i != cursorPosition && line[i] == ')' || line[i] == ']' || line[i] == '}'){
+                openBalance++;
+            }
+        }
+        if(openBalance == 0){
+            size_t closeBalance = 0;
+            for(long i = cursorPosition; i < line.length; i++){
+                if(i != cursorPosition && line[i] == '(' || line[i] == '[' || line[i] == '{'){
+                    closeBalance++;
+                }else if(line[i] == ')' || line[i] == ']' || line[i] == '}'){
+                    if(closeBalance == 0){
+                        closeAt = cast(size_t) i;
+                        break;
+                    }
+                    closeBalance--;
+                }
+            }
+        }
+        if(closeAt > openAt){
+            towrite = (
+                towrite[0 .. openAt] ~
+                "\033[40m" ~ towrite[openAt] ~ "\033[0m" ~
+                towrite[openAt + 1 .. closeAt] ~
+                "\033[40m" ~ towrite[closeAt] ~ "\033[0m" ~
+                towrite[closeAt + 1 .. $]
+            );
+        }
+        
         if(towrite.length > lineLength) {
             towrite = towrite[0 .. lineLength];
         }
@@ -3428,557 +3436,11 @@ version(Windows) {
 
 
 
-
-
-/* Like getting a line, printing a lot of lines is kinda important too, so I'm including
-   that widget here too. */
-
-
-struct ScrollbackBuffer {
-
-    bool demandsAttention;
-
-    this(string name) {
-        this.name = name;
-    }
-
-    void write(T...)(T t) {
-        import std.conv : text;
-        addComponent(text(t), foreground_, background_, null);
-    }
-
-    void writeln(T...)(T t) {
-        write(t, "\n");
-    }
-
-    void writef(T...)(string fmt, T t) {
-        import std.format: format;
-        write(format(fmt, t));
-    }
-
-    void writefln(T...)(string fmt, T t) {
-        writef(fmt, t, "\n");
-    }
-
-    void clear() {
-        lines = null;
-        clickRegions = null;
-        scrollbackPosition = 0;
-    }
-
-    int foreground_ = Color.DEFAULT, background_ = Color.DEFAULT;
-    void color(int foreground, int background) {
-        this.foreground_ = foreground;
-        this.background_ = background;
-    }
-
-    void addComponent(string text, int foreground, int background, bool delegate() onclick) {
-        if(lines.length == 0) {
-            addLine();
-        }
-        bool first = true;
-        import std.algorithm;
-        foreach(t; splitter(text, "\n")) {
-            if(!first) addLine();
-            first = false;
-            lines[$-1].components ~= LineComponent(t, foreground, background, onclick);
-        }
-    }
-
-    void addLine() {
-        lines ~= Line();
-        if(scrollbackPosition) // if the user is scrolling back, we want to keep them basically centered where they are
-            scrollbackPosition++;
-    }
-
-    void addLine(string line) {
-        lines ~= Line([LineComponent(line)]);
-        if(scrollbackPosition) // if the user is scrolling back, we want to keep them basically centered where they are
-            scrollbackPosition++;
-    }
-
-    void scrollUp(int lines = 1) {
-        scrollbackPosition += lines;
-        //if(scrollbackPosition >= this.lines.length)
-        //  scrollbackPosition = cast(int) this.lines.length - 1;
-    }
-
-    void scrollDown(int lines = 1) {
-        scrollbackPosition -= lines;
-        if(scrollbackPosition < 0)
-            scrollbackPosition = 0;
-    }
-
-    void scrollToBottom() {
-        scrollbackPosition = 0;
-    }
-
-    // this needs width and height to know how to word wrap it
-    void scrollToTop(int width, int height) {
-        scrollbackPosition = scrollTopPosition(width, height);
-    }
-
-
-
-
-    struct LineComponent {
-        string text;
-        bool isRgb;
-        union {
-            int color;
-            RGB colorRgb;
-        }
-        union {
-            int background;
-            RGB backgroundRgb;
-        }
-        bool delegate() onclick; // return true if you need to redraw
-
-        // 16 color ctor
-        this(string text, int color = Color.DEFAULT, int background = Color.DEFAULT, bool delegate() onclick = null) {
-            this.text = text;
-            this.color = color;
-            this.background = background;
-            this.onclick = onclick;
-            this.isRgb = false;
-        }
-
-        // true color ctor
-        this(string text, RGB colorRgb, RGB backgroundRgb = RGB(0, 0, 0), bool delegate() onclick = null) {
-            this.text = text;
-            this.colorRgb = colorRgb;
-            this.backgroundRgb = backgroundRgb;
-            this.onclick = onclick;
-            this.isRgb = true;
-        }
-    }
-
-    struct Line {
-        LineComponent[] components;
-        int length() {
-            int l = 0;
-            foreach(c; components)
-                l += c.text.length;
-            return l;
-        }
-    }
-
-    // FIXME: limit scrollback lines.length
-
-    Line[] lines;
-    string name;
-
-    int x, y, width, height;
-
-    int scrollbackPosition;
-
-
-    int scrollTopPosition(int width, int height) {
-        int lineCount;
-
-        foreach_reverse(line; lines) {
-            int written = 0;
-            comp_loop: foreach(cidx, component; line.components) {
-                auto towrite = component.text;
-                foreach(idx, dchar ch; towrite) {
-                    if(written >= width) {
-                        lineCount++;
-                        written = 0;
-                    }
-
-                    if(ch == '\t')
-                        written += 8; // FIXME
-                    else
-                        written++;
-                }
-            }
-            lineCount++;
-        }
-
-        //if(lineCount > height)
-            return lineCount - height;
-        //return 0;
-    }
-
-    void drawInto(Terminal* terminal, in int x = 0, in int y = 0, int width = 0, int height = 0) {
-        if(lines.length == 0)
-            return;
-
-        if(width == 0)
-            width = terminal.width;
-        if(height == 0)
-            height = terminal.height;
-
-        this.x = x;
-        this.y = y;
-        this.width = width;
-        this.height = height;
-
-        /* We need to figure out how much is going to fit
-           in a first pass, so we can figure out where to
-           start drawing */
-
-        int remaining = height + scrollbackPosition;
-        int start = cast(int) lines.length;
-        int howMany = 0;
-
-        bool firstPartial = false;
-
-        static struct Idx {
-            size_t cidx;
-            size_t idx;
-        }
-
-        Idx firstPartialStartIndex;
-
-        // this is private so I know we can safe append
-        clickRegions.length = 0;
-        clickRegions.assumeSafeAppend();
-
-        // FIXME: should prolly handle \n and \r in here too.
-
-        // we'll work backwards to figure out how much will fit...
-        // this will give accurate per-line things even with changing width and wrapping
-        // while being generally efficient - we usually want to show the end of the list
-        // anyway; actually using the scrollback is a bit of an exceptional case.
-
-        // It could probably do this instead of on each redraw, on each resize or insertion.
-        // or at least cache between redraws until one of those invalidates it.
-        foreach_reverse(line; lines) {
-            int written = 0;
-            int brokenLineCount;
-            Idx[16] lineBreaksBuffer;
-            Idx[] lineBreaks = lineBreaksBuffer[];
-            comp_loop: foreach(cidx, component; line.components) {
-                auto towrite = component.text;
-                foreach(idx, dchar ch; towrite) {
-                    if(written >= width) {
-                        if(brokenLineCount == lineBreaks.length)
-                            lineBreaks ~= Idx(cidx, idx);
-                        else
-                            lineBreaks[brokenLineCount] = Idx(cidx, idx);
-
-                        brokenLineCount++;
-
-                        written = 0;
-                    }
-
-                    if(ch == '\t')
-                        written += 8; // FIXME
-                    else
-                        written++;
-                }
-            }
-
-            lineBreaks = lineBreaks[0 .. brokenLineCount];
-
-            foreach_reverse(lineBreak; lineBreaks) {
-                if(remaining == 1) {
-                    firstPartial = true;
-                    firstPartialStartIndex = lineBreak;
-                    break;
-                } else {
-                    remaining--;
-                }
-                if(remaining <= 0)
-                    break;
-            }
-
-            remaining--;
-
-            start--;
-            howMany++;
-            if(remaining <= 0)
-                break;
-        }
-
-        // second pass: actually draw it
-        int linePos = remaining;
-
-        foreach(idx, line; lines[start .. start + howMany]) {
-            int written = 0;
-
-            if(linePos < 0) {
-                linePos++;
-                continue;
-            }
-        
-            terminal.moveTo(x, y + ((linePos >= 0) ? linePos : 0));
-
-            auto todo = line.components;
-
-            if(firstPartial) {
-                todo = todo[firstPartialStartIndex.cidx .. $];
-            }
-
-            foreach(ref component; todo) {
-                if(component.isRgb)
-                    terminal.setTrueColor(component.colorRgb, component.backgroundRgb);
-                else
-                    terminal.color(component.color, component.background);
-                auto towrite = component.text;
-
-                again:
-
-                if(linePos >= height)
-                    break;
-
-                if(firstPartial) {
-                    towrite = towrite[firstPartialStartIndex.idx .. $];
-                    firstPartial = false;
-                }
-
-                foreach(idx, dchar ch; towrite) {
-                    if(written >= width) {
-                        clickRegions ~= ClickRegion(&component, terminal.cursorX, terminal.cursorY, written);
-                        terminal.write(towrite[0 .. idx]);
-                        towrite = towrite[idx .. $];
-                        linePos++;
-                        written = 0;
-                        terminal.moveTo(x, y + linePos);
-                        goto again;
-                    }
-
-                    if(ch == '\t')
-                        written += 8; // FIXME
-                    else
-                        written++;
-                }
-
-                if(towrite.length) {
-                    clickRegions ~= ClickRegion(&component, terminal.cursorX, terminal.cursorY, written);
-                    terminal.write(towrite);
-                }
-            }
-
-            if(written < width) {
-                terminal.color(Color.DEFAULT, Color.DEFAULT);
-                foreach(i; written .. width)
-                    terminal.write(" ");
-            }
-
-            linePos++;
-
-            if(linePos >= height)
-                break;
-        }
-
-        if(linePos < height) {
-            terminal.color(Color.DEFAULT, Color.DEFAULT);
-            foreach(i; linePos .. height) {
-                if(i >= 0 && i < height) {
-                    terminal.moveTo(x, y + i);
-                    foreach(w; 0 .. width)
-                        terminal.write(" ");
-                }
-            }
-        }
-    }
-
-    private struct ClickRegion {
-        LineComponent* component;
-        int xStart;
-        int yStart;
-        int length;
-    }
-    private ClickRegion[] clickRegions;
-
-    /// Default event handling for this widget. Call this only after drawing it into a rectangle
-    /// and only if the event ought to be dispatched to it (which you determine however you want;
-    /// you could dispatch all events to it, or perhaps filter some out too)
-    ///
-    /// Returns true if it should be redrawn
-    bool handleEvent(InputEvent e) {
-        final switch(e.type) {
-            case InputEvent.Type.KeyboardEvent:
-                auto ev = e.keyboardEvent;
-
-                demandsAttention = false;
-
-                switch(ev.which) {
-                    case KeyboardEvent.Key.UpArrow:
-                        scrollUp();
-                        return true;
-                    case KeyboardEvent.Key.DownArrow:
-                        scrollDown();
-                        return true;
-                    case KeyboardEvent.Key.PageUp:
-                        scrollUp(height);
-                        return true;
-                    case KeyboardEvent.Key.PageDown:
-                        scrollDown(height);
-                        return true;
-                    default:
-                        // ignore
-                }
-            break;
-            case InputEvent.Type.MouseEvent:
-                auto ev = e.mouseEvent;
-                if(ev.x >= x && ev.x < x + width && ev.y >= y && ev.y < y + height) {
-                    demandsAttention = false;
-                    // it is inside our box, so do something with it
-                    auto mx = ev.x - x;
-                    auto my = ev.y - y;
-
-                    if(ev.eventType == MouseEvent.Type.Pressed) {
-                        if(ev.buttons & MouseEvent.Button.Left) {
-                            foreach(region; clickRegions)
-                                if(ev.x >= region.xStart && ev.x < region.xStart + region.length && ev.y == region.yStart)
-                                    if(region.component.onclick !is null)
-                                        return region.component.onclick();
-                        }
-                        if(ev.buttons & MouseEvent.Button.ScrollUp) {
-                            scrollUp();
-                            return true;
-                        }
-                        if(ev.buttons & MouseEvent.Button.ScrollDown) {
-                            scrollDown();
-                            return true;
-                        }
-                    }
-                } else {
-                    // outside our area, free to ignore
-                }
-            break;
-            case InputEvent.Type.SizeChangedEvent:
-                // (size changed might be but it needs to be handled at a higher level really anyway)
-                // though it will return true because it probably needs redrawing anyway.
-                return true;
-            case InputEvent.Type.UserInterruptionEvent:
-                throw new UserInterruptionException();
-            case InputEvent.Type.HangupEvent:
-                throw new HangupException();
-            case InputEvent.Type.EndOfFileEvent:
-                // ignore, not relevant to this
-            break;
-            case InputEvent.Type.CharacterEvent:
-            case InputEvent.Type.NonCharacterKeyEvent:
-                // obsolete, ignore them until they are removed
-            break;
-            case InputEvent.Type.CustomEvent:
-            case InputEvent.Type.PasteEvent:
-                // ignored, not relevant to us
-            break;
-        }
-
-        return false;
-    }
-}
-
-
 class UserInterruptionException : Exception {
     this() { super("Ctrl+C"); }
 }
 class HangupException : Exception {
     this() { super("Hup"); }
-}
-
-
-
-/*
-
-    // more efficient scrolling
-    http://msdn.microsoft.com/en-us/library/windows/desktop/ms685113%28v=vs.85%29.aspx
-    // and the unix sequences
-
-
-    rxvt documentation:
-    use this to finish the input magic for that
-
-
-       For the keypad, use Shift to temporarily override Application-Keypad
-       setting use Num_Lock to toggle Application-Keypad setting if Num_Lock
-       is off, toggle Application-Keypad setting. Also note that values of
-       Home, End, Delete may have been compiled differently on your system.
-
-                         Normal       Shift         Control      Ctrl+Shift
-       Tab               ^I           ESC [ Z       ^I           ESC [ Z
-       BackSpace         ^H           ^?            ^?           ^?
-       Find              ESC [ 1 ~    ESC [ 1 $     ESC [ 1 ^    ESC [ 1 @
-       Insert            ESC [ 2 ~    paste         ESC [ 2 ^    ESC [ 2 @
-       Execute           ESC [ 3 ~    ESC [ 3 $     ESC [ 3 ^    ESC [ 3 @
-       Select            ESC [ 4 ~    ESC [ 4 $     ESC [ 4 ^    ESC [ 4 @
-       Prior             ESC [ 5 ~    scroll-up     ESC [ 5 ^    ESC [ 5 @
-       Next              ESC [ 6 ~    scroll-down   ESC [ 6 ^    ESC [ 6 @
-       Home              ESC [ 7 ~    ESC [ 7 $     ESC [ 7 ^    ESC [ 7 @
-       End               ESC [ 8 ~    ESC [ 8 $     ESC [ 8 ^    ESC [ 8 @
-       Delete            ESC [ 3 ~    ESC [ 3 $     ESC [ 3 ^    ESC [ 3 @
-       F1                ESC [ 11 ~   ESC [ 23 ~    ESC [ 11 ^   ESC [ 23 ^
-       F2                ESC [ 12 ~   ESC [ 24 ~    ESC [ 12 ^   ESC [ 24 ^
-       F3                ESC [ 13 ~   ESC [ 25 ~    ESC [ 13 ^   ESC [ 25 ^
-       F4                ESC [ 14 ~   ESC [ 26 ~    ESC [ 14 ^   ESC [ 26 ^
-       F5                ESC [ 15 ~   ESC [ 28 ~    ESC [ 15 ^   ESC [ 28 ^
-       F6                ESC [ 17 ~   ESC [ 29 ~    ESC [ 17 ^   ESC [ 29 ^
-       F7                ESC [ 18 ~   ESC [ 31 ~    ESC [ 18 ^   ESC [ 31 ^
-       F8                ESC [ 19 ~   ESC [ 32 ~    ESC [ 19 ^   ESC [ 32 ^
-       F9                ESC [ 20 ~   ESC [ 33 ~    ESC [ 20 ^   ESC [ 33 ^
-       F10               ESC [ 21 ~   ESC [ 34 ~    ESC [ 21 ^   ESC [ 34 ^
-       F11               ESC [ 23 ~   ESC [ 23 $    ESC [ 23 ^   ESC [ 23 @
-       F12               ESC [ 24 ~   ESC [ 24 $    ESC [ 24 ^   ESC [ 24 @
-       F13               ESC [ 25 ~   ESC [ 25 $    ESC [ 25 ^   ESC [ 25 @
-       F14               ESC [ 26 ~   ESC [ 26 $    ESC [ 26 ^   ESC [ 26 @
-       F15 (Help)        ESC [ 28 ~   ESC [ 28 $    ESC [ 28 ^   ESC [ 28 @
-       F16 (Menu)        ESC [ 29 ~   ESC [ 29 $    ESC [ 29 ^   ESC [ 29 @
-
-       F17               ESC [ 31 ~   ESC [ 31 $    ESC [ 31 ^   ESC [ 31 @
-       F18               ESC [ 32 ~   ESC [ 32 $    ESC [ 32 ^   ESC [ 32 @
-       F19               ESC [ 33 ~   ESC [ 33 $    ESC [ 33 ^   ESC [ 33 @
-       F20               ESC [ 34 ~   ESC [ 34 $    ESC [ 34 ^   ESC [ 34 @
-                                                                 Application
-       Up                ESC [ A      ESC [ a       ESC O a      ESC O A
-       Down              ESC [ B      ESC [ b       ESC O b      ESC O B
-       Right             ESC [ C      ESC [ c       ESC O c      ESC O C
-       Left              ESC [ D      ESC [ d       ESC O d      ESC O D
-       KP_Enter          ^M                                      ESC O M
-       KP_F1             ESC O P                                 ESC O P
-       KP_F2             ESC O Q                                 ESC O Q
-       KP_F3             ESC O R                                 ESC O R
-       KP_F4             ESC O S                                 ESC O S
-       XK_KP_Multiply    *                                       ESC O j
-       XK_KP_Add         +                                       ESC O k
-       XK_KP_Separator   ,                                       ESC O l
-       XK_KP_Subtract    -                                       ESC O m
-       XK_KP_Decimal     .                                       ESC O n
-       XK_KP_Divide      /                                       ESC O o
-       XK_KP_0           0                                       ESC O p
-       XK_KP_1           1                                       ESC O q
-       XK_KP_2           2                                       ESC O r
-       XK_KP_3           3                                       ESC O s
-       XK_KP_4           4                                       ESC O t
-       XK_KP_5           5                                       ESC O u
-       XK_KP_6           6                                       ESC O v
-       XK_KP_7           7                                       ESC O w
-       XK_KP_8           8                                       ESC O x
-       XK_KP_9           9                                       ESC O y
-*/
-
-version(Demo_kbhit)
-void main() {
-    auto terminal = Terminal(ConsoleOutputType.linear);
-    auto input = RealTimeConsoleInput(&terminal, ConsoleInputFlags.raw);
-
-    int a;
-    char ch = '.';
-    while(a < 1000) {
-        a++;
-        if(a % terminal.width == 0) {
-            terminal.write("\r");
-            if(ch == '.')
-                ch = ' ';
-            else
-                ch = '.';
-        }
-
-        if(input.kbhit())
-            terminal.write(input.getch());
-        else
-            terminal.write(ch);
-
-        terminal.flush();
-
-        import core.thread;
-        Thread.sleep(50.msecs);
-    }
 }
 
 /*
@@ -4050,37 +3512,6 @@ struct RGB {
 }
 
 // This is an approximation too for a few entries, but a very close one.
-RGB xtermPaletteIndexToColor(int paletteIdx) {
-    RGB color;
-
-    if(paletteIdx < 16) {
-        if(paletteIdx == 7)
-            return RGB(0xc0, 0xc0, 0xc0);
-        else if(paletteIdx == 8)
-            return RGB(0x80, 0x80, 0x80);
-
-        color.r = (paletteIdx & 0b001) ? ((paletteIdx & 0b1000) ? 0xff : 0x80) : 0x00;
-        color.g = (paletteIdx & 0b010) ? ((paletteIdx & 0b1000) ? 0xff : 0x80) : 0x00;
-        color.b = (paletteIdx & 0b100) ? ((paletteIdx & 0b1000) ? 0xff : 0x80) : 0x00;
-
-    } else if(paletteIdx < 232) {
-        // color ramp, 6x6x6 cube
-        color.r = cast(ubyte) ((paletteIdx - 16) / 36 * 40 + 55);
-        color.g = cast(ubyte) (((paletteIdx - 16) % 36) / 6 * 40 + 55);
-        color.b = cast(ubyte) ((paletteIdx - 16) % 6 * 40 + 55);
-
-        if(color.r == 55) color.r = 0;
-        if(color.g == 55) color.g = 0;
-        if(color.b == 55) color.b = 0;
-    } else {
-        // greyscale ramp, from 0x8 to 0xee
-        color.r = cast(ubyte) (8 + (paletteIdx - 232) * 10);
-        color.g = color.r;
-        color.b = color.g;
-    }
-
-    return color;
-}
 
 int approximate16Color(RGB color) {
     int c;

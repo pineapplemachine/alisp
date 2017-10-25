@@ -30,7 +30,7 @@ void lispRepl(LispContext* context){
     auto terminal = Terminal(ConsoleOutputType.linear);
     auto lineGetter = new LineGetter(&terminal);
     auto input = RealTimeConsoleInput(
-        &terminal, ConsoleInputFlags.raw | ConsoleInputFlags.allInputEvents
+        &terminal, ConsoleInputFlags.raw | ConsoleInputFlags.paste
     );
     
     context.logFunction = delegate void(in string message){
