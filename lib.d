@@ -7,8 +7,8 @@ import mach.io.file.sys : FileHandle, fclose;
 import mach.io.stdio : stdio;
 import mach.io.stream.filestream : FileStream;
 import mach.io.stream.io : read, write;
-import mach.math : fisnan, fisinf, sqrt, abs, kahansum, pi, tau;
-import mach.math : sin, cos, tan, asin, acos, atan, atan2;
+import mach.math : fisnan, fisinf, sqrt, abs, kahansum, e, pi, tau;
+import mach.math : sin, cos, tan, asin, acos, atan, atan2, log;
 import mach.range : map, asarray, product, reduce, mergesort;
 import mach.text.utf : utf8encode;
 import std.uni : toUpper, toLower;
@@ -181,6 +181,14 @@ void registerTypes(LispContext* context){
             if(args.length == 0) return context.Null;
             return context.boolean(
                 context.evaluate(args[0]).type is LispObject.Type.Keyword
+            );
+        }
+    );
+    context.registerBuiltin("context?",
+        function LispObject*(LispContext* context, LispArguments args){
+            if(args.length == 0) return context.Null;
+            return context.boolean(
+                context.evaluate(args[0]).type is LispObject.Type.Context
             );
         }
     );
@@ -367,7 +375,7 @@ void registerNumberType(LispContext* context){
             if(args.length == 0) return context.Null;
             LispObject* numberObject = context.evaluate(args[0]);
             for(size_t i = 1; i < args.length; i++){
-                if(compare(numberObject, context.evaluate(args[i])) >= 0){
+                if(compare(context.evaluate(args[i]), numberObject) >= 0){
                     return context.False;
                 }
             }
@@ -1202,7 +1210,7 @@ void registerAssignment(LispContext* context){
             if(args.length == 0){
                 return context.Null;
             }else if(!args[0].isList()){
-                context.logIdentifierError(args[0]);
+                context.identifierError(args[0]);
                 return context.Null;
             }
             LispObject* value = (args.length > 1 ?
@@ -1213,18 +1221,18 @@ void registerAssignment(LispContext* context){
             }else{
                 LispContext.Identity identity = context.identify(args[0]);
                 if(!identity.attribute){
-                    context.logIdentifierError(args[0]);
+                    context.identifierError(args[0]);
                     return context.Null;
                 }else if(identity.contextObject){
                     if(identity.contextObject.type !is LispObject.Type.Object){
-                        context.logIdentifierError(args[0]);
+                        context.identifierError(args[0]);
                         return context.Null;
                     }
                     identity.contextObject.insert(identity.attribute, value);
                 }else if(!identity.context || identity.context == context){
                     context.inScope.insert(identity.attribute, value);
                 }else{
-                    context.logIdentifierError(args[0]);
+                    context.identifierError(args[0]);
                     return context.Null;
                 }
             }
@@ -1241,17 +1249,17 @@ void registerAssignment(LispContext* context){
             if(args.length <= 1){
                 return context.Null;
             }else if(!args[0].isList()){
-                context.logIdentifierError(args[0]);
+                context.identifierError(args[0]);
                 return context.Null;
             }
             LispObject* value = context.evaluate(args[1]);
             LispContext.Identity identity = context.identify(args[0]);
             if(!identity.attribute){
-                context.logIdentifierError(args[0]);
+                context.identifierError(args[0]);
                 return context.Null;
             }else if(identity.contextObject){
                 if(!identity.contextObject.type !is LispObject.Type.Object){
-                    context.logIdentifierError(args[0]);
+                    context.identifierError(args[0]);
                     return context.Null;
                 }
                 identity.contextObject.insert(identity.attribute, value);
@@ -1494,7 +1502,7 @@ void registerControlFlow(LispContext* context){
         function LispObject*(LispContext* context, LispArguments args){
             if(args.length == 0){
                 return context.Null;
-            }else if(args.length == 0){
+            }else if(args.length == 1){
                 context.evaluate(args[0]);
                 return context.Null;
             }else if(args.length == 2){
@@ -1638,6 +1646,21 @@ void registerStandardIO(LispContext* context){
             auto str = stringifyArgs(context, args);
             stdio.writeln(str.text);
             return str.object;
+        }
+    );
+    context.registerBuiltin("assert",
+        function LispObject*(LispContext* context, LispArguments args){
+            if(args.length == 0) return context.Null;
+            LispObject* object = context.evaluate(args[0]);
+            if(object.toBoolean()){
+                return object;
+            }else if(args.length == 1){
+                context.assertionError(null);
+                return object;
+            }else{
+                context.assertionError(context.evaluate(args[1]));
+                return object;
+            }
         }
     );
     fileType = context.register("file", context.object());
@@ -1850,6 +1873,30 @@ void registerMath(LispContext* context){
             return context.number(atan2(
                 context.evaluate(args[0]).toNumber(),
                 context.evaluate(args[1]).toNumber()
+            ));
+        }
+    );
+    context.registerBuiltin("log2",
+        function LispObject*(LispContext* context, LispArguments args){
+            if(args.length < 2) return context.NaN;
+            return context.number(log!2(
+                context.evaluate(args[0]).toNumber()
+            ));
+        }
+    );
+    context.registerBuiltin("log10",
+        function LispObject*(LispContext* context, LispArguments args){
+            if(args.length < 2) return context.NaN;
+            return context.number(log!10(
+                context.evaluate(args[0]).toNumber()
+            ));
+        }
+    );
+    context.registerBuiltin("ln",
+        function LispObject*(LispContext* context, LispArguments args){
+            if(args.length < 2) return context.NaN;
+            return context.number(log!e(
+                context.evaluate(args[0]).toNumber()
             ));
         }
     );

@@ -52,6 +52,7 @@ struct LispContext{
     void delegate(in string message) logFunction;
     void delegate(LispObject* identifier) onIdentifierError;
     void delegate(LispObject* expression) onExpressionError;
+    void delegate(LispObject* error) onAssertionError;
     
     @property LispObject* NaN(){
         return this.PosNaN;
@@ -174,18 +175,29 @@ struct LispContext{
     void logError(T...)(T values){
         this.log("Error: ", values);
     }
-    void logIdentifierError(LispObject* identifier){
+    void identifierError(LispObject* identifier){
         if(this.root.onIdentifierError){
             this.root.onIdentifierError(identifier);
         }else{
             this.logError("Invalid identifier ", this.encode(identifier));
         }
     }
-    void logExpressionError(LispObject* expression){
+    void expressionError(LispObject* expression){
         if(this.root.onExpressionError){
             this.root.onExpressionError(identifier);
         }else{
             this.logError("Invalid expression ", this.encode(expression));
+        }
+    }
+    void assertionError(LispObject* error){
+        if(this.root.onAssertionError){
+            this.root.onAssertionError(error);
+        }else{
+            if(error && error !is this.Null){
+                this.logError("Assertion error: ", this.stringify(error));
+            }else{
+                this.logError("Assertion error.");
+            }
         }
     }
     
@@ -545,13 +557,13 @@ struct LispContext{
                 return identity.value;
             }
         }
-        this.logIdentifierError(identifier);
+        this.identifierError(identifier);
         return this.Null;
     }
     LispObject* evaluateExpression(LispObject* expression){
         assert(expression);
         if(!expression.isList){
-            this.logExpressionError(expression);
+            this.expressionError(expression);
             return this.Null;
         }
         if(!expression.listLength){
@@ -564,7 +576,7 @@ struct LispContext{
         }else if(firstObject.type is LispObject.Type.Null){
             return firstObject;
         }else{
-            this.logExpressionError(expression);
+            this.expressionError(expression);
             return this.Null;
         }
     }

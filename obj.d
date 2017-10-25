@@ -55,6 +55,10 @@ struct LispFunction{
             functionContext.register(
                 "@"d, this.parentContext.list(remainingArguments)
             );
+        }else{
+            functionContext.register(
+                "@"d, this.parentContext.list()
+            );
         }
         return functionContext.evaluate(this.expressionBody);
     }

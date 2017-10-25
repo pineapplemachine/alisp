@@ -93,6 +93,7 @@ LispObject* parseSymbol(
     }else if(symbol[0] == ':'){
         return context.keyword(cast(dstring) utf8decode(symbol[1 .. $]).asarray());
     }else if(symbol[0] == '0' && symbol.length > 1 && symbol[1] == 'x'){
+        // TODO: Hex float literals
         if(symbol.length < 3){
             throw new Exception("Malformed hex literal.");
         }
