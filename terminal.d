@@ -3017,7 +3017,7 @@ class LineGetter {
     }
 
     private int lastDrawLength = 0;
-    void redraw() {
+    void redraw(bool highlight = true) {
         terminal.moveTo(startOfLineX, startOfLineY);
 
         auto lineLength = availableLineLength();
@@ -3030,43 +3030,45 @@ class LineGetter {
         auto cursorPositionToDrawX = cursorPosition - horizontalScrollPosition;
         auto cursorPositionToDrawY = 0;
         
-        size_t openAt = 0;
-        size_t closeAt = 0;
-        size_t openBalance = 0;
-        for(long i = cursorPosition; i > 0; i--){
-            if(i >= line.length) continue;
-            if(line[i] == '(' || line[i] == '[' || line[i] == '{'){
-                if(openBalance == 0){
-                    openAt = cast(size_t) i;
-                    break;
-                }
-                openBalance--;
-            }else if(i != cursorPosition && line[i] == ')' || line[i] == ']' || line[i] == '}'){
-                openBalance++;
-            }
-        }
-        if(openBalance == 0){
-            size_t closeBalance = 0;
-            for(long i = cursorPosition; i < line.length; i++){
-                if(i != cursorPosition && line[i] == '(' || line[i] == '[' || line[i] == '{'){
-                    closeBalance++;
-                }else if(line[i] == ')' || line[i] == ']' || line[i] == '}'){
-                    if(closeBalance == 0){
-                        closeAt = cast(size_t) i;
+        if(highlight){
+            size_t openAt = 0;
+            size_t closeAt = 0;
+            size_t openBalance = 0;
+            for(long i = cursorPosition; i > 0; i--){
+                if(i >= line.length) continue;
+                if(line[i] == '(' || line[i] == '[' || line[i] == '{'){
+                    if(openBalance == 0){
+                        openAt = cast(size_t) i;
                         break;
                     }
-                    closeBalance--;
+                    openBalance--;
+                }else if(i < cursorPosition - 1 && line[i] == ')' || line[i] == ']' || line[i] == '}'){
+                    openBalance++;
                 }
             }
-        }
-        if(closeAt > openAt){
-            towrite = (
-                towrite[0 .. openAt] ~
-                "\033[40m" ~ towrite[openAt] ~ "\033[0m" ~
-                towrite[openAt + 1 .. closeAt] ~
-                "\033[40m" ~ towrite[closeAt] ~ "\033[0m" ~
-                towrite[closeAt + 1 .. $]
-            );
+            if(openBalance == 0){
+                size_t closeBalance = 0;
+                for(long i = openAt; i < line.length; i++){
+                    if(i != openAt && line[i] == '(' || line[i] == '[' || line[i] == '{'){
+                        closeBalance++;
+                    }else if(line[i] == ')' || line[i] == ']' || line[i] == '}'){
+                        if(closeBalance == 0){
+                            closeAt = cast(size_t) i;
+                            break;
+                        }
+                        closeBalance--;
+                    }
+                }
+            }
+            if(closeAt > openAt){
+                towrite = (
+                    towrite[0 .. openAt] ~
+                    "\033[40m" ~ towrite[openAt] ~ "\033[0m" ~
+                    towrite[openAt + 1 .. closeAt] ~
+                    "\033[40m" ~ towrite[closeAt] ~ "\033[0m" ~
+                    towrite[closeAt + 1 .. $]
+                );
+            }
         }
         
         if(towrite.length > lineLength) {

@@ -2,7 +2,7 @@
 // output: false
 (boolean null)
 
-// test: Boolean from true
+// test: Boolean from false
 // output: false
 (boolean false)
 
@@ -15,13 +15,10 @@
 (boolean '\0')
 
 // test: Boolean from non-null characters
-// output: true
-(all
-    (boolean 'X')
-    (boolean 'y')
-    (boolean '0')
-    (boolean 'f')
-)
+(assert (is true (boolean 'X')))
+(assert (is true (boolean 'y')))
+(assert (is true (boolean '0')))
+(assert (is true (boolean 'f')))
 
 // test: Boolean from zero
 // output: false
@@ -32,97 +29,62 @@
 (boolean NaN)
 
 // test: Booleans from nonzero non-NaN numbers
-// output: true
-(all
-    (boolean 1)
-    (boolean -1)
-    (boolean 0.1)
-    (boolean infinity)
-    (boolean -infinity)
-)
+(assert (is true (boolean 1)))
+(assert (is true (boolean -1)))
+(assert (is true (boolean 0.1)))
+(assert (is true (boolean infinity)))
+(assert (is true (boolean -infinity)))
 
 // test: Booleans from keywords
-// output: true
-(all
-    (boolean (keyword))
-    (boolean :x)
-    (boolean :0)
-    (boolean :false)
-)
+(assert (is true (boolean (keyword))))
+(assert (is true (boolean :x)))
+(assert (is true (boolean :0)))
+(assert (is true (boolean :false)))
 
 // test: Boolean from context
 // output: true
 (boolean (context))
 
 // test: Booleans from lists
-// output: true
-(all
-    (boolean [])
-    (boolean [1 2 3])
-)
+(assert (is true (boolean [])))
+(assert (is true (boolean [1 2 3])))
 
 // test: Booleans from identifiers
-// output: true
-(all
-    (boolean (identifier))
-    (boolean (quote x:y))
-)
+(assert (is true (boolean (identifier))))
+(assert (is true (boolean (quote x:y))))
 
 // test: Booleans from expressions
-// output: true
-(all
-    (boolean (quote ()))
-    (boolean (quote (sum 1 2 3)))
-)
+(assert (is true (boolean (quote ()))))
+(assert (is true (boolean (quote (sum 1 2 3)))))
 
 // test: Booleans from maps
-// output: true
-(all
-    (boolean {})
-    (boolean {:x 0 :y 1})
-)
+(assert (is true (boolean {})))
+(assert (is true (boolean {:x 0 :y 1})))
 
 // test: Booleans from objects
-// output: true
-(all
-    (boolean boolean)
-    (boolean (object))
-    (boolean (object :x 0 :y 1))
-)
+(assert (is true (boolean boolean)))
+(assert (is true (boolean (object))))
+(assert (is true (boolean (object :x 0 :y 1))))
 
 // test: Booleans from functions
-// output: true
-(all
-    (boolean (function [] ()))
-    (boolean (function [:x] x))
-)
+(assert (is true (boolean (function [] ()))))
+(assert (is true (boolean (function [:x] x))))
 
 // test: Booleans from methods
-// output: true
-(all
-    (boolean 0:abs)
-    (boolean []:length)
-)
+(assert (is true (boolean 0:abs)))
+(assert (is true (boolean []:length)))
 
 // test: Booleans from builtins
-// output: true
-(all
-    (boolean is)
-    (boolean all)
-    (boolean number:abs)
-)
+(assert (is true (boolean is)))
+(assert (is true (boolean all)))
+(assert (is true (boolean number:abs)))
 
 // test: Booleans from falsey type-coerced objects
-// output: false
-(any
-    (boolean (new object 0))
-    (boolean (new map NaN))
-)
+(assert (is false (boolean (new object 0))))
+(assert (is false (boolean (new map NaN))))
 
 // test: Booleans from truthy type-coerced objects
-// output: true
-(all
-    (boolean (new list 1))
-    (boolean (new number []))
-    (boolean (new character (context)))
-)
+(assert (is true (boolean (new list 1))))
+(assert (is true (boolean (new number []))))
+(assert (is true (boolean (new character (context)))))
+

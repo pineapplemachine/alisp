@@ -15,6 +15,7 @@ import std.uni : toUpper, toLower;
 
 import alisp.context : LispContext;
 import alisp.list : LispList;
+import alisp.map : LispMap;
 import alisp.obj : LispObject, LispArguments, LispFunction, LispMethod;
 import alisp.parse : parse, LispParseException;
 
@@ -70,6 +71,70 @@ auto invokeCallable = function LispObject*(LispContext* context, LispArguments a
     return context.invoke(
         functionObject, argumentList.store.list.objects
     );
+};
+
+auto anyFunction = function LispObject*(LispContext* context, LispArguments args){
+    LispObject* falsey = context.Null;
+    foreach(arg; args){
+        LispObject* value = context.evaluate(arg);
+        if(value.toBoolean()) return value;
+        falsey = value;
+    }
+    return falsey;
+};
+auto anyFunctionPredicate = function LispObject*(
+    LispContext* context, LispArguments args, LispObject* predicate
+){
+    assert(predicate && predicate.isCallable());
+    LispObject* falsey = context.Null;
+    foreach(arg; args){
+        LispObject* value = context.evaluate(arg);
+        LispObject* match = context.invoke(predicate, [value]);
+        if(match.toBoolean()) return match;
+        falsey = match;
+    }
+    return falsey;
+};
+
+auto allFunction = function LispObject*(LispContext* context, LispArguments args){
+    LispObject* truthy = context.Null;
+    foreach(arg; args){
+        LispObject* value = context.evaluate(arg);
+        if(!value.toBoolean()) return value;
+        truthy = value;
+    }
+    return truthy;
+};
+auto allFunctionPredicate = function LispObject*(
+    LispContext* context, LispArguments args, LispObject* predicate
+){
+    assert(predicate && predicate.isCallable());
+    LispObject* truthy = context.Null;
+    foreach(arg; args){
+        LispObject* value = context.evaluate(arg);
+        LispObject* match = context.invoke(predicate, [value]);
+        if(!match.toBoolean()) return match;
+        truthy = match;
+    }
+    return truthy;
+};
+
+auto noneFunction = function LispObject*(LispContext* context, LispArguments args){
+    foreach(arg; args){
+        LispObject* value = context.evaluate(arg);
+        if(value.toBoolean()) return context.False;
+    }
+    return context.True;
+};
+auto noneFunctionPredicate = function LispObject*(
+    LispContext* context, LispArguments args, LispObject* predicate
+){
+    foreach(arg; args){
+        LispObject* value = context.evaluate(arg);
+        LispObject* match = context.invoke(predicate, [value]);
+        if(match.toBoolean()) return context.False;
+    }
+    return context.True;
 };
 
 void registerBuiltins(LispContext* context){
@@ -770,6 +835,48 @@ void registerListType(LispContext* context){
             return accumulator;
         }
     );
+    context.registerBuiltin(context.ListType, "any",
+        function LispObject*(LispContext* context, LispArguments args){
+            if(args.length == 0) return context.Null;
+            LispObject* list = context.evaluate(args[0]);
+            if(!list.isList()) return context.Null;
+            if(args.length == 1){
+                return anyFunction(context, list.list.objects);
+            }else{
+                return anyFunctionPredicate(
+                    context, list.list.objects, context.evaluate(args[1])
+                );
+            }
+        }
+    );
+    context.registerBuiltin(context.ListType, "all",
+        function LispObject*(LispContext* context, LispArguments args){
+            if(args.length == 0) return context.Null;
+            LispObject* list = context.evaluate(args[0]);
+            if(!list.isList()) return context.Null;
+            if(args.length == 1){
+                return allFunction(context, list.list.objects);
+            }else{
+                return allFunctionPredicate(
+                    context, list.list.objects, context.evaluate(args[1])
+                );
+            }
+        }
+    );
+    context.registerBuiltin(context.ListType, "none",
+        function LispObject*(LispContext* context, LispArguments args){
+            if(args.length == 0) return context.Null;
+            LispObject* list = context.evaluate(args[0]);
+            if(!list.isList()) return context.Null;
+            if(args.length == 1){
+                return noneFunction(context, list.list.objects);
+            }else{
+                return noneFunctionPredicate(
+                    context, list.list.objects, context.evaluate(args[1])
+                );
+            }
+        }
+    );
     context.registerBuiltin(context.ListType, "upper",
         function LispObject*(LispContext* context, LispArguments args){
             LispObject* list = context.evaluate(args[0]);
@@ -958,6 +1065,18 @@ void registerMapType(LispContext* context){
                 }
             }
             return map;
+        }
+    );
+    context.registerBuiltin(context.MapType, "clone",
+        function LispObject*(LispContext* context, LispArguments args){
+            if(args.length == 0) return context.Null;
+            LispObject* map = context.evaluate(args[0]);
+            if(!map.isMap()) return context.Null;
+            LispObject* newMap = context.map(new LispMap(map.map.size));
+            foreach(pair; map.map.asrange()){
+                newMap.map.insert(pair.key, pair.value);
+            }
+            return newMap;
         }
     );
     context.registerBuiltin(context.MapType, "clear",
@@ -1446,37 +1565,9 @@ void registerLogic(LispContext* context){
             return context.boolean(!context.evaluate(args[0]).toBoolean());
         }
     );
-    context.registerBuiltin("any",
-        function LispObject*(LispContext* context, LispArguments args){
-            LispObject* falsey = context.Null;
-            foreach(arg; args){
-                LispObject* value = context.evaluate(arg);
-                if(value.toBoolean()) return value;
-                falsey = value;
-            }
-            return falsey;
-        }
-    );
-    context.registerBuiltin("all",
-        function LispObject*(LispContext* context, LispArguments args){
-            LispObject* truthy = context.Null;
-            foreach(arg; args){
-                LispObject* value = context.evaluate(arg);
-                if(!value.toBoolean()) return value;
-                truthy = value;
-            }
-            return truthy;
-        }
-    );
-    context.registerBuiltin("none",
-        function LispObject*(LispContext* context, LispArguments args){
-            foreach(arg; args){
-                LispObject* value = context.evaluate(arg);
-                if(value.toBoolean()) return context.False;
-            }
-            return context.True;
-        }
-    );
+    context.registerBuiltin("any", anyFunction);
+    context.registerBuiltin("all", allFunction);
+    context.registerBuiltin("none", noneFunction);
 }
 
 void registerControlFlow(LispContext* context){
@@ -1650,7 +1741,10 @@ void registerStandardIO(LispContext* context){
     );
     context.registerBuiltin("assert",
         function LispObject*(LispContext* context, LispArguments args){
-            if(args.length == 0) return context.Null;
+            if(args.length == 0){
+                context.assertionError(null);
+                return context.Null;
+            }
             LispObject* object = context.evaluate(args[0]);
             if(object.toBoolean()){
                 return object;

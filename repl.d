@@ -99,6 +99,7 @@ void lispRepl(LispContext* context){
             case InputEvent.Type.KeyboardEvent:
                 const key = event.get!(InputEvent.Type.KeyboardEvent).which;
                 if(key == '\n'){
+                    lineGetter.redraw(false);
                     string completedLine = lineGetter.finishGettingLine();
                     terminal.writeln();
                     terminal.flush();
@@ -120,7 +121,7 @@ void lispRepl(LispContext* context){
                     auto lines = pasted.split('\n');
                     lineGetter.justHitTab = false;
                     lineGetter.addString(cast(string) lines.front.asarray());
-                    lineGetter.redraw();
+                    lineGetter.redraw(false);
                     lines.popFront();
                     string completedFirstLine = lineGetter.finishGettingLine();
                     terminal.writeln();
