@@ -1,0 +1,116 @@
+%YAML 1.2
+---
+# http://www.sublimetext.com/docs/3/syntax.html
+name: Alisp
+file_extensions: [alisp]
+scope: source.alisp
+contexts:
+  main:
+    - include: language_constants
+    - include: character_literals
+    - include: numeric_literals
+    - include: string_literals
+    - include: keyword_literals
+    - include: language_keywords
+    - include: punctuation
+    - include: comments
+  
+  language_constants:
+    - match: (?<!:)\b(null)(?=($|\s|:|'|"|\(|\[|\{|\)|\]|\|\/\/|\/\*}))
+      scope: constant.language.null.alisp
+    - match: (?<!:)\b(true|false)(?=($|\s|:|'|"|\(|\[|\{|\)|\]|\|\/\/|\/\*}))
+      scope: constant.language.boolean.alisp
+  
+  character_literals:
+    - match: (')(\\?[^\\]|\\\\)(')
+      scope: constant.character.alisp
+  
+  numeric_literals:
+    - match: (?<!:)(?m)(^|-|\+|\b)(infinity|NaN)\b
+      scope: constant.language.numeric.alisp
+      captures:
+        1: constant.numeric.decimal.alisp
+    - match: (?m)(^|-|\+|\b)(([0-9]+)(\.[0-9]+([eE][+-]?[0-9]+)?)?|([0-9]*\.[0-9]+([eE][+-]?[0-9]+)?)|([0-9]*\.[0-9]*[eE][+-]?[0-9]+))
+      scope: constant.numeric.decimal.alisp
+    - match: (?m)(^|-|\+|\b)(0x)([0-9a-fA-F]*)(\.[0-9a-fA-f]+([pP][0-9]+)?)?
+      scope: constant.numeric.hexadecimal.alisp
+      
+  string_literals:
+    - match: (")([^"\\]*(?:\\.[^"\\]*)*)(")
+      scope: constant.string.alisp
+      
+  keyword_literals:
+    - match: (?<=^|[\s\(\[\{])((:)(.*?))(?=($|\s|:|'|"|\(|\[|\{|\)|\]|\|\/\/|\/\*}))
+      scope: constant.keyword.body.alisp
+      captures:
+        2: constant.keyword.colon.alisp
+  
+  language_keywords:
+    - match: (?<!:)\blet\b
+      scope: keyword.assignment.let.alisp
+    - match: (?<!:)\bset\b
+      scope: keyword.assignment.set.alisp
+    - match: (?<!:)\b(do|when|if|switch|while|until)\b
+      scope: keyword.control.alisp
+    - match: (?<!:)\b(return)\b
+      scope: keyword.return.alisp
+    - match: (?<!:)\b(import|reimport)\b
+      scope: keyword.operator.import.alisp
+    - match: (?<!:)\b((null|boolean|character|number|keyword|context|list|map|object|function|method|builtin)\?)(?=($|\s|:|'|"|\(|\[|\{|\)|\]|\|\/\/|\/\*}))
+      scope: keyword.operator.type.type?.alisp
+    - match: (?<!:)\b(boolean|character|number|keyword|context|list|identifier|expression|map|object|function|method|builtin)\b
+      scope: keyword.type.alisp
+    - match: (?<!:)@(?=($|\s|:|'|"|\(|\[|\{|\)|\]|\|\/\/|\/\*}))
+      scope: keyword.arguments.alisp
+    - match: (?<!:)\bnew\b
+      scope: keyword.operator.type.new.alisp
+    - match: (?<!:)\btypeof\b
+      scope: keyword.operator.type.typeof.alisp
+    - match: (?<!:)\b(inherits\?)(?=($|\s|:|'|"|\(|\[|\{|\)|\]|\|\/\/|\/\*}))
+      scope: keyword.operator.type.inherits?.alisp
+    - match: (?<!:)\bquote\b
+      scope: keyword.operator.quote.alisp
+    - match: (?<!:)\b(is|isnot|same|notsame|eq|noteq|like|notlike|cmp|asc|desc|min|max|gt|lt|gte|lte)\b
+      scope: keyword.operator.comparison.alisp
+    - match: (?<!:)\b(not|any|all|none)\b
+      scope: keyword.operator.logical.alisp
+    - match: (?<!:)\b(inc|dec|abs|sum|sub|mult|div|modulo|pow|sqrt|sin|cos|tan|asin|acos|atan|atan2|log2|log10|ln)\b
+      scope: keyword.operator.arithmetic.alisp
+    - match: (?<!:)\bhash\b
+      scope: keyword.operator.hash.alisp
+    - match: (?<!:)\bapply\b
+      scope: keyword.operator.apply.alisp
+    - match: (?<!:)\bencode\b
+      scope: keyword.operator.encode.alisp
+    - match: (?<!:)\btext\b
+      scope: keyword.operator.text.alisp
+    - match: (?<!:)\bprint\b
+      scope: keyword.operator.print.alisp
+    - match: (?<!:)\bassert\b
+      scope: keyword.operator.assert.alisp
+  
+  punctuation:
+    - match: (\:)
+      scope: keyword.operator.identifier.alisp
+    - match: \(|\)
+      scope: keyword.operator.paren.paren.alisp
+    - match: \[|\]
+      scope: keyword.operator.paren.bracket.alisp
+    - match: \{|\}
+      scope: keyword.operator.paren.brace.alisp
+  
+  comments:
+    - match: (?m)(^\/\/)(\s*(test):)(.*)
+      captures:
+        1: comment.line.alisp
+        2: comment.line.documentation.keyword.alisp
+        4: comment.line.documentation.string.alisp
+    - match: (?m)(^\/\/)(\s*(output|error):)
+      captures:
+        1: comment.line.alisp
+        2: comment.line.documentation.keyword.alisp
+    - match: (\/\/)(.*)
+      scope: comment.line.alisp
+    - match: (\/\*)((.|\s)*?)(\*\/)
+      scope: comment.block.alisp
+      
