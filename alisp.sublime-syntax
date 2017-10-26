@@ -22,8 +22,13 @@ contexts:
       scope: constant.language.boolean.alisp
   
   character_literals:
-    - match: (')(\\?[^\\]|\\\\)(')
+    - match: (')((\\[^\\])|([^\\])|(\\\\))(')
       scope: constant.character.alisp
+      captures:
+        1: constant.character.begin.alisp
+        3: constant.character.escape.alisp
+        5: constant.character.escape.alisp
+        6: constant.character.end.alisp
   
   numeric_literals:
     - match: (?<!:)(?m)(^|-|\+|\b)(infinity|NaN)\b
@@ -36,9 +41,16 @@ contexts:
       scope: constant.numeric.hexadecimal.alisp
       
   string_literals:
-    - match: (")([^"\\]*(?:\\.[^"\\]*)*)(")
-      scope: constant.string.alisp
-      
+    - match: '"'
+      scope: constant.string.begin.alisp
+      push:
+        - meta_scope: constant.string.alisp
+        - match: '"'
+          scope: constant.string.end.alisp
+          pop: true
+        - match: \\.
+          scope: constant.string.escape.alisp
+          
   keyword_literals:
     - match: (?<=^|[\s\(\[\{])((:)(.*?))(?=($|\s|:|'|"|\(|\[|\{|\)|\]|\|\/\/|\/\*}))
       scope: constant.keyword.body.alisp
