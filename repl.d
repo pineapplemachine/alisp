@@ -19,16 +19,10 @@ import alisp.parse : parse, LispParseException;
 //    exit(0);
 //}
 
-/*
-(
-    test
-    yo
-)
-*/
-
 void lispRepl(LispContext* context){
     auto terminal = Terminal(ConsoleOutputType.linear);
     auto lineGetter = new LineGetter(&terminal);
+    lineGetter.prompt = ">> ";
     auto input = RealTimeConsoleInput(
         &terminal, ConsoleInputFlags.raw | ConsoleInputFlags.paste
     );
@@ -39,7 +33,7 @@ void lispRepl(LispContext* context){
     
     terminal.setTitle("Alisp 0.1.0");
     terminal.writeln("Alisp 0.1.0");
-    terminal.write(">> ");
+    //terminal.write(">> ");
     
     string expression = "";
     size_t parens = 0;
@@ -73,11 +67,14 @@ void lispRepl(LispContext* context){
         if(parens == 0){
             evaluateInput(expression);
             expression = "";
+        }else{
+            expression ~= '\n';
         }
         return parens == 0;
     }
     
     lineGetter.startGettingLine();
+    bool lastExpressionCompleted = true;
     
     while(true){
         auto event = input.nextEvent();
@@ -86,15 +83,27 @@ void lispRepl(LispContext* context){
             case InputEvent.Type.CharacterEvent: goto case;
             case InputEvent.Type.NonCharacterKeyEvent: goto case;
             case InputEvent.Type.MouseEvent: goto case;
-            case InputEvent.Type.CustomEvent: goto case;
+            case InputEvent.Type.CustomEvent:
+                break;
+            // Terminal size changed event
             case InputEvent.Type.SizeChangedEvent:
+                lineGetter.redraw();
                 break;
             // Termination events
             case InputEvent.Type.UserInterruptionEvent: goto case;
-            case InputEvent.Type.HangupEvent: goto case;
-            case InputEvent.Type.EndOfFileEvent:
+            case InputEvent.Type.HangupEvent:
                 terminal.writeln();
                 return;
+            case InputEvent.Type.EndOfFileEvent:
+                if(lineGetter.line.length){
+                    lineGetter.redraw(false);
+                    terminal.write('\n');
+                    lineGetter.startGettingLine();
+                    break;
+                }else{
+                    terminal.writeln();
+                    return;
+                }
             // Keypress event
             case InputEvent.Type.KeyboardEvent:
                 const key = event.get!(InputEvent.Type.KeyboardEvent).which;
@@ -103,8 +112,8 @@ void lispRepl(LispContext* context){
                     string completedLine = lineGetter.finishGettingLine();
                     terminal.writeln();
                     terminal.flush();
-                    bool completedExpression = addLine(completedLine);
-                    terminal.write(completedExpression ? ">> " : ".. ");
+                    lastExpressionCompleted = addLine(completedLine);
+                    lineGetter.prompt = lastExpressionCompleted ? ">> " : ".. ";
                     lineGetter.startGettingLine();
                 }else{
                     lineGetter.workOnLine(event);
@@ -126,8 +135,8 @@ void lispRepl(LispContext* context){
                     string completedFirstLine = lineGetter.finishGettingLine();
                     terminal.writeln();
                     terminal.flush();
-                    bool completedFirstExpression = addLine(completedFirstLine);
-                    terminal.write(completedFirstExpression ? ">> " : ".. ");
+                    lastExpressionCompleted = addLine(completedFirstLine);
+                    lineGetter.prompt = lastExpressionCompleted ? ">> " : ".. ";
                     lineGetter.startGettingLine();
                     while(!lines.empty){
                         string lineString = cast(string) lines.front.asarray();
@@ -138,8 +147,8 @@ void lispRepl(LispContext* context){
                             lineGetter.redraw();
                         }else{
                             terminal.writeln(lineString);
-                            bool completedExpression = addLine(lineString);
-                            terminal.write(completedExpression ? ">> " : ".. ");
+                            lastExpressionCompleted = addLine(lineString);
+                            lineGetter.prompt = lastExpressionCompleted ? ">> " : ".. ";
                         }
                     }
                 }

@@ -143,10 +143,11 @@ void registerBuiltins(LispContext* context){
     registerAssignment(context);
     registerComparison(context);
     registerLogic(context);
+    registerMath(context);
     registerControlFlow(context);
     registerImport(context);
     registerStandardIO(context);
-    registerMath(context);
+    registerErrorHandling(context);
 }
 
 void registerLiterals(LispContext* context){
@@ -1057,7 +1058,7 @@ void registerMapType(LispContext* context){
             if(map.isMap()){
                 for(size_t i = 1; i < args.length; i++){
                     LispObject* argObject = context.evaluate(args[i]);
-                    if(argObject.isMap()){
+                    if(argObject.isMap() && argObject.map !is map.map){
                         foreach(pair; argObject.maprange()){
                             map.insert(pair.key, pair.value);
                         }
@@ -1727,7 +1728,7 @@ void registerStandardIO(LispContext* context){
             );
         }
     );
-    context.registerBuiltin("text",
+    context.registerBuiltin("toString",
         function LispObject*(LispContext* context, LispArguments args){
             return context.list(stringifyArgs(context, args).text);
         }
@@ -1739,25 +1740,7 @@ void registerStandardIO(LispContext* context){
             return str.object;
         }
     );
-    context.registerBuiltin("assert",
-        function LispObject*(LispContext* context, LispArguments args){
-            if(args.length == 0){
-                context.assertionError(null);
-                return context.Null;
-            }
-            LispObject* object = context.evaluate(args[0]);
-            if(object.toBoolean()){
-                return object;
-            }else if(args.length == 1){
-                context.assertionError(null);
-                return object;
-            }else{
-                context.assertionError(context.evaluate(args[1]));
-                return object;
-            }
-        }
-    );
-    fileType = context.register("file", context.object());
+    fileType = context.register("File", context.object());
     context.register(fileType, "stdin", new LispObject(0.0, fileType));
     context.register(fileType, "stdout", new LispObject(1.0, fileType));
     context.register(fileType, "stderr", new LispObject(2.0, fileType));
@@ -1994,4 +1977,191 @@ void registerMath(LispContext* context){
             ));
         }
     );
+}
+
+LispObject* errorType;
+LispObject* identifierErrorType;
+LispObject* expressionErrorType;
+LispObject* assertErrorType;
+LispObject* testErrorType;
+LispObject* tryErrorHandler;
+LispObject* testType;
+LispObject* makeAssertError(LispContext* context, LispObject* object, LispObject* message){
+    assert(context && object);
+    LispMap* errorMap = new LispMap();
+    errorMap.insert(context.keyword("object"), object);
+    if(message){
+        errorMap.insert(context.keyword("message"), message);
+    }
+    return context.object(errorMap, assertErrorType);
+}
+//auto runTestFunction = function LispObject*(LispContext* context, LispArguments args){
+//    LispObject* test = context.evaluate(args[0]);
+//    if(!test.isMap()) return context.Null;
+//    LispContext* testContext = new LispContext(context);
+//};
+void registerErrorHandling(LispContext* context){
+    errorType = context.register("Error", context.object());
+    context.registerBuiltin(errorType, "toString",
+        function LispObject*(LispContext* context, LispArguments args){
+            if(args.length == 0) return context.Null;
+            LispObject* errorObject = context.evaluate(args[0]);
+            if(errorObject.type is LispObject.Type.Object){
+                LispObject* message = errorObject.getAttribute(
+                    context.keyword("message")
+                ).object;
+                return message ? message : context.Null;
+            }else{
+                return context.Null;
+            }
+        }
+    );
+    identifierErrorType = context.register(
+        "IdentifierError", context.object(errorType)
+    );
+    expressionErrorType = context.register(
+        "ExpressionError", context.object(errorType)
+    );
+    assertErrorType = context.register(
+        "AssertError", context.object(errorType)
+    );
+    testErrorType = context.register(
+        "TestError", context.object(errorType)
+    );
+    context.onIdentifierError = delegate void(LispContext* context, LispObject* identifier){
+        LispMap* errorMap = new LispMap();
+        errorMap.insert(context.keyword("message"),
+            context.list("Encountered invalid identifier " ~ context.encode(identifier))
+        );
+        errorMap.insert(context.keyword("identifier"),
+            identifier
+        );
+        context.handleError(context.object(errorMap, identifierErrorType));
+    };
+    context.onExpressionError = delegate void(LispContext* context, LispObject* expression){
+        LispMap* errorMap = new LispMap();
+        errorMap.insert(context.keyword("message"),
+            context.list("Encountered invalid expression.")
+        );
+        errorMap.insert(context.keyword("expression"),
+            expression
+        );
+        context.handleError(context.object(errorMap, expressionErrorType));
+    };
+    context.registerBuiltin("throw",
+        function LispObject*(LispContext* context, LispArguments args){
+            LispObject* error = args.length ? context.evaluate(args[0]) : context.Null;
+            context.handleError(error);
+            return error;
+        }
+    );
+    context.registerBuiltin("try",
+        function LispObject*(LispContext* context, LispArguments args){
+            if(args.length < 2) return context.Null;
+            // Create an error handler
+            LispMap* handlerMap = new LispMap();
+            LispObject* errorName = context.evaluate(args[0]);
+            handlerMap.insert(context.keyword("errorName"), errorName);
+            handlerMap.insert(context.keyword("catch"),
+                args.length > 2 ? args[2] : context.Null
+            );
+            handlerMap.insert(context.keyword("finally"),
+                args.length > 3 ? args[3] : context.Null
+            );
+            handlerMap.insert(context.keyword("invoke"), context.nativeFunction(
+                function LispObject*(LispContext* invokeContext, LispArguments invokeArgs){
+                    LispObject* handler = invokeContext.evaluate(invokeArgs[0]);
+                    if(!handler.isMap()){
+                        return invokeContext.Null;
+                    }
+                    LispObject* error = (invokeArgs.length > 1 ?
+                        invokeArgs[1] : invokeContext.Null
+                    );
+                    if(LispObject* errorName = handler.getAttribute(
+                        invokeContext.keyword("errorName")
+                    ).object){
+                        invokeContext.register(errorName, error);
+                    }
+                    if(LispObject* catchBody = handler.getAttribute(
+                        invokeContext.keyword("catch")
+                    ).object){
+                        LispObject* result = invokeContext.evaluate(catchBody);
+                        if(!invokeContext.error) invokeContext.error = error;
+                        return result;
+                    }else{
+                        invokeContext.error = error;
+                        return invokeContext.Null;
+                    }
+                }
+            ));
+            LispObject* errorHandler = context.object(context.object(handlerMap));
+            // Create a context
+            LispContext* tryContext = new LispContext(context);
+            tryContext.errorHandler = errorHandler;
+            // Evaluate try expression
+            LispObject* result = tryContext.evaluate(args[1]);
+            // Evaluate finally expression
+            if(args.length > 3){
+                LispContext* finallyContext = new LispContext(context);
+                finallyContext.register(errorName,
+                    tryContext.error ? tryContext.error : context.Null
+                );
+                finallyContext.evaluate(args[3]);
+            }
+            return result;
+        }
+    );
+    context.registerBuiltin("assert",
+        function LispObject*(LispContext* context, LispArguments args){
+            LispObject* object = (args.length ?
+                context.evaluate(args[0]) : context.Null
+            );
+            if(!object.toBoolean()){
+                context.handleError(makeAssertError(context, object,
+                    args.length > 1 ? context.evaluate(args[1]) : null
+                ));
+            }
+            return object;
+        }
+    );
+    context.registerBuiltin("test",
+        function LispObject*(LispContext* context, LispArguments args){
+            return context.Null; // Do nothing
+        }
+    );
+    //context.registerBuiltin(testType, "run",
+    //});
+    //context.registerBuiltin(testType, "invoke",
+    //    function LispObject*(LispContext* context, LispArguments args){
+    //        if(args.length == 0) return context.Null;
+    //        LispObject* testName = context.Null;
+    //        LispObject* testBody = context.Null;
+    //        if(args.length == 1){
+    //            testBody = context.evaluate(args[0]);
+    //        }else{
+    //            testName = context.evaluate(args[0]);
+    //            testBody = context.evaluate(args[1]);
+    //        }
+    //        LispObject* testObject = new LispObject(new LispMap(), testType);
+    //        testObject.map.insert("name", testName);
+    //        testObject.map.insert("body", testName);
+    //        testObject.map.insert("invoke", runTest);
+            
+    //        string mode = "rb";
+    //        size_t fileIndex = openedFiles.length;
+    //        if(args.length > 1){
+    //            mode = cast(string) context.stringify(
+    //                context.evaluate(args[1])
+    //            );
+    //        }
+    //        try{
+    //            openedFiles ~= Path(filePath).open(mode).target;
+    //            return new LispObject(
+    //                cast(LispObject.Number) fileIndex, fileType
+    //            );
+    //        }catch(Exception e){
+    //            return context.Null;
+    //        }
+    //    }
+    //);
 }

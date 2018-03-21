@@ -50,9 +50,45 @@ struct LispContext{
     size_t lispFunctionId = 0;
     
     void delegate(in string message) logFunction;
-    void delegate(LispObject* identifier) onIdentifierError;
-    void delegate(LispObject* expression) onExpressionError;
-    void delegate(LispObject* error) onAssertionError;
+    void delegate(LispContext* context, LispObject* identifier) onIdentifierError;
+    void delegate(LispContext* context, LispObject* expression) onExpressionError;
+    
+    LispObject* error;
+    LispObject* errorHandler;
+    
+    auto getLogFunction(){
+        if(this.logFunction) return this.logFunction;
+        LispContext* context = this.parent;
+        while(context){
+            if(context.logFunction){
+                return context.logFunction;
+            }
+            context = context.parent;
+        }
+        return null;
+    }
+    auto getOnIdentifierError(){
+        if(this.onIdentifierError) return this.onIdentifierError;
+        LispContext* context = this.parent;
+        while(context){
+            if(context.onIdentifierError){
+                return context.onIdentifierError;
+            }
+            context = context.parent;
+        }
+        return null;
+    }
+    auto getOnExpressionError(){
+        if(this.onExpressionError) return this.onExpressionError;
+        LispContext* context = this.parent;
+        while(context){
+            if(context.onExpressionError){
+                return context.onExpressionError;
+            }
+            context = context.parent;
+        }
+        return null;
+    }
     
     @property LispObject* NaN(){
         return this.PosNaN;
@@ -165,8 +201,8 @@ struct LispContext{
     }
     
     void log(T...)(T values){
-        if(this.root && this.root.logFunction){
-            this.root.logFunction(text(values));
+        if(auto log = this.getLogFunction()){
+            log(text(values));
         }
     }
     void logWarning(T...)(T values){
@@ -176,27 +212,28 @@ struct LispContext{
         this.log("Error: ", values);
     }
     void identifierError(LispObject* identifier){
-        if(this.root.onIdentifierError){
-            this.root.onIdentifierError(identifier);
-        }else{
-            this.logError("Invalid identifier ", this.encode(identifier));
+        if(auto callback = this.getOnIdentifierError()){
+            callback(&this, identifier);
         }
     }
     void expressionError(LispObject* expression){
-        if(this.root.onExpressionError){
-            this.root.onExpressionError(identifier);
-        }else{
-            this.logError("Invalid expression ", this.encode(expression));
+        if(auto callback = this.getOnExpressionError()){
+            callback(&this, expression);
         }
     }
-    void assertionError(LispObject* error){
-        if(this.root.onAssertionError){
-            this.root.onAssertionError(error);
+    
+    // Indicate that an error has occurred in this context and should be raised
+    // immediately to the parent context
+    LispObject* handleError(LispObject* errorObject){
+        if(this.errorHandler){
+            assert(this.errorHandler.isCallable());
+            return this.invoke(this.errorHandler, [errorObject]);
         }else{
-            if(error && error !is this.Null){
-                this.logError("Assertion error: ", this.stringify(error));
+            this.error = errorObject;
+            if(this.parent){
+                return this.parent.handleError(errorObject);
             }else{
-                this.logError("Assertion error.");
+                return this.Null;
             }
         }
     }
@@ -244,6 +281,21 @@ struct LispContext{
                     ).asarray();
                 }
                 goto default;
+            case LispObject.Type.Object:
+                LispObject* toString = this.getFunctionAttribute(
+                    object, this.keyword("toString")
+                );
+                if(toString){
+                    if(toString.isCallable()){
+                        return this.stringifyImpl(
+                            this.invoke(toString, []), size_t.max
+                        );
+                    }else{
+                        return this.stringifyImpl(toString, size_t.max);
+                    }
+                }else{
+                    return this.encode(object, truncate);
+                }
             default:
                 return this.encode(object, truncate);
         }
@@ -315,6 +367,9 @@ struct LispContext{
     }
     LispObject* object(LispObject* typeObject){
         return new LispObject(new LispMap(), LispObject.Type.Object, typeObject);
+    }
+    LispObject* object(LispMap* map, LispObject* typeObject){
+        return new LispObject(map, LispObject.Type.Object, typeObject);
     }
     LispObject* context(){
         return new LispObject(&this, this.ContextType);
@@ -528,6 +583,9 @@ struct LispContext{
     // Evaluate an object.
     LispObject* evaluate(LispObject* object){
         assert(object);
+        if(this.error !is null){
+            return this.Null;
+        }
         LispObject* typeObject = object.typeObject;
         while(true){
             if(typeObject is this.IdentifierType){
@@ -581,12 +639,21 @@ struct LispContext{
         }
     }
     
+    LispObject* getFunctionAttribute(LispObject* object, LispObject* attribute){
+        auto result = object.getAttribute(attribute);
+        if(!result.rootAttribute && result.object && result.object.isCallable()){
+            return this.lispMethod(LispMethod(object, result.object));
+        }else{
+            return result.object;
+        }
+    }
     // Invoke a callable object.
     LispObject* invoke(LispObject* functionObject, LispArguments arguments){
-        // TODO: Rewrite to avoid crash for cyclic references
         assert(functionObject && functionObject.isCallable());
         if(functionObject.isMap()){
-            LispObject* invoke = functionObject.getAttribute(this.Invoke).object;
+            LispObject* invoke = this.getFunctionAttribute(
+                functionObject, this.Invoke
+            );
             if(invoke && invoke.isCallable()){
                 return this.invoke(invoke, arguments);
             }else{

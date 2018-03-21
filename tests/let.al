@@ -1,26 +1,28 @@
-// test: Identifier is not valid before assignment
-// output: null
-// error: identifier x
-x
+(test "Identifier is not valid before assignment" (do
+    (try :error invalidIdentifier () (assert (isnot null error)))
+))
 
-// test: Invocation returns assigned value
-// output: 100
-(let x 100)
+(test "Assignment with let returns the assigned value" (do
+    (assert (is (let x 100) 100))
+))
 
-// test: Assigned identifier becomes valid after assignment
-// output: 200
-(let x 200) x
+(test "Identifier becomes valid after let assignment" (do
+    (let x 200)
+    (assert (is x 200))
+))
 
-// test: Identifier is valid even after assignment to null
-// output: null
-(let x null) null
+(test "Identifier is valid even after let assignment to null" (do
+    (let x null)
+    (assert (is x null))
+))
 
-// test: Nested calls
-// output: true
-(let x (let y 300)) (is x y 300)
+(test "Verify behavior of nested calls to let" (do
+    (let x (let y 300))
+    (assert (is x y 300))
+))
 
-// test: Shadows variables in outer scopes
-// output: ["outer" "inner"]
-(let x "outer")
-(let y ((function [] (do (let x "inner") x))))
-[x y]
+(test "Assignments with let shadow other variables in outer scopes" (do
+    (let x "outer")
+    (let y ((function [] (do (let x "inner") x))))
+    (assert (eq [x y] ["outer" "inner"]))
+))

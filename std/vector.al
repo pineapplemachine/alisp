@@ -171,8 +171,8 @@
     :at (function [:v :index] (v:components:at index))
 ))
 
-// Dynamically add swizzling methods. For example:
-// (vec:zy) is the same as (new vector:2 :x vec:z :y vec:y)
+// Dynamically add swizzling methods to the vector object.
+// For example, (vec:zy) is the same as (new vector:2 :x vec:z :y vec:y)
 ("xyzw":each (function [:ch0]
     ("xyzw":each (function [:ch1] (do
         (let vector:(keyword [ch0 ch1]) (function [:v] (new vector:2
@@ -192,4 +192,4 @@
     )))
 ))
 
-vector
+(return vector)

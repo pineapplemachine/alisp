@@ -1,21 +1,19 @@
-// test: Outputs null with no inputs
-// output: null
-(any)
+(test "Any returns null with no inputs" (do
+    (assert (is null (any)))
+))
 
-// test: Outputs first input with one input
-// output: [null true false 0 1]
-[
-    (any null)
-    (any true)
-    (any false)
-    (any 0)
-    (any 1)
-]
+(test "Any returns the first input when there was only one input" (do
+    (assert (is null (any null)))
+    (assert (is true (any true)))
+    (assert (is false (any false)))
+    (assert (is 0 (any 0)))
+    (assert (is 1 (any 1)))
+))
 
-// test: Outputs first truthy input
-// output: 2
-(any 0 NaN null 0 '\0' 2 10 null)
+(test "Any returns the first truthy input" (do
+    (assert (is 2 (any 0 NaN null 0 '\0' 2 10 null)))
+))
 
-// test: Outputs last falsey input
-// output: '\0'
-(any 0 false null NaN '\0')
+(test "Any returns the last falsey input when there was no truthy input" (do
+    (assert (is '\0' (any 0 false null NaN '\0')))
+))

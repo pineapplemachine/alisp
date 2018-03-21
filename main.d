@@ -14,6 +14,20 @@ LispContext* getContext(){
         stdio.writeln(message);
     };
     registerBuiltins(context);
+    context.errorHandler = context.nativeFunction(
+        function LispObject*(LispContext* context, LispObject*[] args){
+            assert(args.length && args[0]);
+            LispObject* messageKeyword = context.keyword("message");
+            if(args[0].isMap() && args[0].map.get(messageKeyword)){
+                stdio.writeln("Unhandled error: ",
+                    context.stringify(args[0].map.get(messageKeyword))
+                );
+            }else{
+                stdio.writeln("Unhandled error.");
+            }
+            return args[0];
+        }
+    );
     return context;
 }
 
