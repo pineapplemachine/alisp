@@ -32,7 +32,6 @@ int runTests(in string[] paths){
             testContext.errorHandler = context.nativeFunction(
                 function LispObject*(LispContext* context, LispObject*[] args){
                     assert(args.length && args[0]);
-                    stdio.writeln("Handling a test error: ", context.stringify(args[0]));
                     context.error = args[0];
                     return args[0];
                 }

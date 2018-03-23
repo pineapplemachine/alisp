@@ -515,13 +515,15 @@ struct LispObject{
     }
     
     void push(LispObject* object){
-        assert(object);
+        assert(object && this.type is Type.List);
         this.list.push(object);
     }
     void extend(LispList list){
+        assert(this.type is Type.List);
         this.list.extend(list);
     }
     void extend(LispObject*[] list){
+        assert(this.type is Type.List);
         this.list.extend(list);
     }
     
