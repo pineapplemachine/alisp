@@ -106,7 +106,16 @@
         0 (assert)
         true :met
         NaN (assert)
+        // This condition and its expression are not evaluated
         true (assert)
+    )))
+))
+
+(test "Switch stops evaluating conditions upon finding the first satisfied condition" (do
+    (assert (is :met (switch
+        true :met
+        // Neither condition nor expression are ever evaluated
+        (assert) (assert)
     )))
 ))
 
