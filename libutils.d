@@ -1,6 +1,6 @@
 module alisp.libutils;
 
-import mach.math : fnearequal, fidentical, fisnan;
+import mach.math : fnearequal, fisnan;
 import mach.range : map, join, all, asarray;
 import mach.text.numeric : parsefloat, writefloat;
 import mach.text.utf : utf8decode;
@@ -10,7 +10,7 @@ import alisp.obj : LispObject, LispFloatSettings;
 
 alias Type = LispObject.Type;
 
-enum double LikeEpsilon = 1e-16;
+enum double FloatCompareEpsilon = 1e-16;
 
 bool characterLikeBoolean(in LispObject.Character character, in LispObject.Boolean boolean){
     return boolean == (character != 0);
@@ -108,7 +108,7 @@ bool equal(LispObject* a, LispObject* b){
             return a.character == b.character;
         case Type.Number:
             return (!fisnan(a.number) &&
-                fidentical(a.number, b.number)
+                fnearequal(a.number, b.number)
             );
         case Type.Keyword:
             return a.keyword == b.keyword;
@@ -191,7 +191,7 @@ bool like(LispObject* a, LispObject* b){
                     return numberLikeBoolean(a.number, b.boolean);
                 case Type.Number:
                     return (
-                        fnearequal(a.number, b.number, LikeEpsilon) ||
+                        fnearequal(a.number, b.number, FloatCompareEpsilon) ||
                         (fisnan(a.number) && fisnan(b.number))
                     );
                 case Type.Character:
