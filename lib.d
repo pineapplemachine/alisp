@@ -1581,7 +1581,7 @@ void registerControlFlow(LispContext* context){
     );
     context.registerBuiltin("when",
         function LispObject*(LispContext* context, LispArguments args){
-            if(args.length <= 1 || !context.evaluate(args[0]).toBoolean()){
+            if(args.length < 1 || !context.evaluate(args[0]).toBoolean()){
                 return context.Null;
             }else{
                 LispObject* result = context.Null;
@@ -1990,9 +1990,9 @@ LispObject* makeAssertError(LispContext* context, LispObject* object, LispObject
     assert(context && object);
     LispMap* errorMap = new LispMap();
     errorMap.insert(context.keyword("object"), object);
-    if(message){
-        errorMap.insert(context.keyword("message"), message);
-    }
+    errorMap.insert(context.keyword("message"), (message ?
+        message : context.list("Assertion error"d)
+    ));
     return context.object(errorMap, assertErrorType);
 }
 //auto runTestFunction = function LispObject*(LispContext* context, LispArguments args){
