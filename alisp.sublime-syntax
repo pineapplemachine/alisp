@@ -8,17 +8,18 @@ contexts:
   main:
     - include: language_constants
     - include: character_literals
-    - include: numeric_literals
     - include: string_literals
     - include: keyword_literals
     - include: language_keywords
+    - include: other_identifiers
+    - include: numeric_literals
     - include: punctuation
     - include: comments
   
   language_constants:
-    - match: (?<!:)\b(null)(?=($|\s|:|'|"|\(|\[|\{|\)|\]|\|\/\/|\/\*}))
+    - match: (?<!:)\b(null)\b
       scope: constant.language.null.alisp
-    - match: (?<!:)\b(true|false)(?=($|\s|:|'|"|\(|\[|\{|\)|\]|\|\/\/|\/\*}))
+    - match: (?<!:)\b(true|false)\b
       scope: constant.language.boolean.alisp
   
   character_literals:
@@ -31,13 +32,9 @@ contexts:
         6: constant.character.end.alisp
   
   numeric_literals:
-    - match: (?<!:)(?m)(^|-|\+|\b)(infinity|NaN)\b
-      scope: constant.language.numeric.alisp
-      captures:
-        1: constant.numeric.decimal.alisp
-    - match: (?m)(^|-|\+|\b)(([0-9]+)(\.[0-9]+([eE][+-]?[0-9]+)?)?|([0-9]*\.[0-9]+([eE][+-]?[0-9]+)?)|([0-9]*\.[0-9]*[eE][+-]?[0-9]+))
+    - match: ([+-])?(([0-9]+)((\.[0-9])?+([eE][+-]?[0-9]+)?)?|([0-9]*\.[0-9]+([eE][+-]?[0-9]+)?))
       scope: constant.numeric.decimal.alisp
-    - match: (?m)(^|-|\+|\b)(0x)([0-9a-fA-F]*)(\.[0-9a-fA-f]+([pP][0-9]+)?)?
+    - match: ([+-])?((0x)([0-9a-fA-F]*)(\.[0-9a-fA-f]+([pP][0-9]+)?)?)
       scope: constant.numeric.hexadecimal.alisp
       
   string_literals:
@@ -100,6 +97,14 @@ contexts:
       scope: keyword.operator.print.alisp
     - match: (?<!:)\bassert\b
       scope: keyword.operator.assert.alisp
+    - match: (?<!:)([+-])?(infinity|NaN)\b
+      scope: constant.language.numeric.alisp
+      captures:
+        1: constant.numeric.decimal.alisp
+    
+  other_identifiers:
+    - match: \b[^0-9\s][^\s]*\b
+      scope: variable.other.alisp
   
   punctuation:
     - match: (\:)
